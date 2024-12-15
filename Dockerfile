@@ -1,6 +1,12 @@
 # Step 1: Build stage.
 FROM node:20
 
+# FFmpeg 설치
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Set workspace directory.
 WORKDIR /app
 

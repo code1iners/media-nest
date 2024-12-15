@@ -1,5 +1,6 @@
 import { generate } from '@ce1pers/random-helpers';
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { PassThrough } from 'stream';
 import { exec as youtubeExec } from 'youtube-dl-exec';
@@ -9,7 +10,11 @@ import { GetAudioByIdInput, GetAudioInput } from './dto/get-audio.dto';
 export class AudioService {
   private readonly logger = new Logger(AudioService.name);
 
+  constructor(private readonly configService: ConfigService) {}
+
   process(url: string, filename: string, bitrate: number, response: Response) {
+    this.logger.log(url, filename, bitrate);
+
     // Set headers.
     response.setHeader('Content-Type', 'audio/mpeg');
     response.setHeader(
@@ -30,6 +35,8 @@ export class AudioService {
         format: format,
         ignoreErrors: true, // Keep going when developed errors.
         audioFormat: 'mp3',
+        extractAudio: true,
+        ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
         // dumpSingleJson: true, // Show metadata of the video.
       },
       { stdio: ['ignore', 'pipe', 'ignore'] },

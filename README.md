@@ -36,7 +36,7 @@ docker build -t media-nest:latest .
 #### 2. Run Application.
 
 ```bash
-docker run --env-file .env -d -p 3030:3030 media-nest
+docker run --env-file .env.production -d -p 3030:3030 media-nest
 ```
 
 #### 3. Check server.

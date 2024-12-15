@@ -1,5 +1,6 @@
 import { generate } from '@ce1pers/random-helpers';
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { PassThrough } from 'stream';
 import { exec as youtubeExec } from 'youtube-dl-exec';
@@ -9,12 +10,16 @@ import { GetVideoByIdInput, GetVideoInput } from './dto/get-video.dto';
 export class VideoService {
   private readonly logger = new Logger(VideoService.name);
 
+  constructor(private readonly configService: ConfigService) {}
+
   process(
     url: string,
     filename: string,
     resolution: number,
     response: Response,
   ) {
+    this.logger.log(url, filename, resolution);
+
     // Set headers.
     response.setHeader('Content-Type', 'video/mp4');
     response.setHeader(
@@ -34,6 +39,7 @@ export class VideoService {
         output: '-',
         format: format,
         ignoreErrors: true, // Keep going when developed errors.
+        ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
         // dumpSingleJson: true, // Show metadata of the video.
       },
       { stdio: ['ignore', 'pipe', 'ignore'] },
