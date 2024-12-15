@@ -1,12 +1,10 @@
 FROM node:16-buster
 
-RUN npm install -g pnpm
-
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+COPY package*.json ./
 
-RUN pnpm install --frozen-lockfile
+RUN npm ci --only=production
 
 COPY . .
 
