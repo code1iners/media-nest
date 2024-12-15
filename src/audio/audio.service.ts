@@ -14,7 +14,7 @@ export class AudioService {
     response.setHeader('Content-Type', 'audio/mpeg');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="${filename}.mp4"`,
+      `attachment; filename="${filename}.mp3"`,
     );
 
     // Set format.
