@@ -44,7 +44,7 @@ export class AudioService {
         addMetadata: true,
         // dumpSingleJson: true, // Show metadata of the video.
       },
-      { stdio: ['ignore', 'pipe', 'ignore'] },
+      // { stdio: ['ignore', 'pipe', 'ignore'] },
     );
 
     process.on('error', (err) => {

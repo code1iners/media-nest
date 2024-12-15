@@ -35,18 +35,14 @@ export class VideoService {
     const tempFilePath = `/tmp/${filename}.mp3`;
 
     // Process.
-    const process = youtubeExec(
-      url,
-      {
-        output: '-',
-        format: format,
-        ignoreErrors: true, // Keep going when developed errors.
-        ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
-        addMetadata: true,
-        // dumpSingleJson: true, // Show metadata of the video.
-      },
-      { stdio: ['ignore', 'pipe', 'ignore'] },
-    );
+    const process = youtubeExec(url, {
+      output: tempFilePath,
+      format: format,
+      ignoreErrors: true, // Keep going when developed errors.
+      ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
+      addMetadata: true,
+      // dumpSingleJson: true, // Show metadata of the video.
+    });
 
     process.on('error', (err) => {
       this.logger.error(err);
