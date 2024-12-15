@@ -1,10 +1,8 @@
-FROM node:16-buster
+FROM node:20
 
 WORKDIR /app
 
 COPY package*.json ./
-
-RUN npm ci --only=production
 
 COPY . .
 
