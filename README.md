@@ -21,36 +21,33 @@ $ npm run start
 
 # watch mode
 $ npm run start:dev
-
-# production mode
-$ npm run start:prod
 ```
 
-## Usage
+## Another usage
 
-### Docker
+### Docker (Background)
 
 #### 1. Build with `Dockerfile`
 
-```shell
+```bash
 docker build -t media-nest:latest .
 ```
 
 #### 2. Run Application.
 
-```shell
+```bash
 docker run --env-file .env -d -p 3030:3030 media-nest
 ```
 
 #### 3. Check server.
 
-```shell
+```bash
 curl http://localhost:3030/health # {"ok":true}
 ```
 
 #### 4. Request video or audio.
 
-```shell
+```bash
 # Enter your browser to download video with best quality.
 http://localhost:3030/video/[VIDEO_ID]
 
@@ -62,4 +59,24 @@ http://localhost:3030/audio/[AUDIO_ID]
 
 # Enter your browser to download audio with specific options.
 http://localhost:3030/audio/[AUDIO_ID]?filename=[SOMETHING]&bitrate=320
+```
+
+## Errors
+
+### FFMPEG Issue
+
+If you had got some errors, maybe you can need to install `ffmpeg` program on your machine.
+
+#### macOS
+
+```bash
+# With homebrew (If you had `homebrew` already)
+brew install ffmpeg
+```
+
+#### Windows
+
+```bash
+# With chocolatey (If you had `chocolatey` already)
+choco install ffmpeg
 ```
