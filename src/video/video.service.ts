@@ -1,3 +1,4 @@
+import { generate } from '@ce1pers/random-helpers';
 import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { PassThrough } from 'stream';
@@ -9,7 +10,7 @@ export class VideoService {
   private readonly logger = new Logger(VideoService.name);
 
   getVideo(videoId: string, input: GetVideoInput, response: Response) {
-    const { filename, resolution = 360 } = input;
+    const { filename = generate({ length: 15 }), resolution = 360 } = input;
 
     // Set video url.
     const url = `https://www.youtube.com/watch?v=${videoId}`;
