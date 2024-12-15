@@ -20,11 +20,14 @@ export class VideoService {
   ) {
     this.logger.log(url, filename, resolution);
 
+    const finalFileName = `${filename}.mp4`;
+    const deleteFilePath = `${finalFileName}.webm`;
+
     // Set headers.
     response.setHeader('Content-Type', 'video/mp4');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}.mp4`,
+      `attachment; filename*=UTF-8''${encodeURIComponent(finalFileName)}`,
     );
 
     // Set format.
@@ -32,7 +35,7 @@ export class VideoService {
       ? `bestvideo[height<=${resolution}]+bestaudio/best`
       : `bestvideo+bestaudio/best`;
 
-    const tempFilePath = `/tmp/${filename}.mp3`;
+    const tempFilePath = `/tmp/${finalFileName}`;
 
     // Process.
     const process = youtubeExec(url, {
@@ -52,10 +55,12 @@ export class VideoService {
       this.logger.log(`code = ${code}`);
 
       if (code === 0) {
-        response.sendFile(tempFilePath, () => {
-          unlinkSync(tempFilePath);
+        response.sendFile(deleteFilePath, () => {
+          unlinkSync(deleteFilePath);
+          this.logger.log(`successfully Downloaded.`);
         });
       } else {
+        unlinkSync(deleteFilePath);
         this.logger.error(`youtube-dl exited with code ${code}`);
         response.status(500).send('Error generating audio file');
       }
@@ -63,17 +68,25 @@ export class VideoService {
   }
 
   getVideoById(videoId: string, input: GetVideoByIdInput, response: Response) {
-    const { filename = generate({ length: 15 }), resolution } = input;
+    try {
+      const { filename = generate({ length: 15 }), resolution } = input;
 
-    // Set video url.
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
+      // Set video url.
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-    this.process(url, filename, resolution, response);
+      this.process(url, filename, resolution, response);
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 
   getVideo(input: GetVideoInput, response: Response) {
-    const { url, filename = generate({ length: 15 }), resolution } = input;
+    try {
+      const { url, filename = generate({ length: 15 }), resolution } = input;
 
-    this.process(url, filename, resolution, response);
+      this.process(url, filename, resolution, response);
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 }

@@ -57,8 +57,10 @@ export class AudioService {
       if (code === 0) {
         response.sendFile(tempFilePath, () => {
           unlinkSync(tempFilePath);
+          this.logger.log(`successfully Downloaded.`);
         });
       } else {
+        unlinkSync(tempFilePath);
         this.logger.error(`youtube-dl exited with code ${code}`);
         response.status(500).send('Error generating audio file');
       }
