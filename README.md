@@ -25,3 +25,41 @@ $ npm run start:dev
 # production mode
 $ npm run start:prod
 ```
+
+## Usage
+
+### Docker
+
+#### 1. Build with `Dockerfile`
+
+```shell
+docker build -t media-nest:latest .
+```
+
+#### 2. Run Application.
+
+```shell
+docker run --env-file .env -d -p 3030:3030 media-nest
+```
+
+#### 3. Check server.
+
+```shell
+curl http://localhost:3030/health # {"ok":true}
+```
+
+#### 4. Request video or audio.
+
+```shell
+# Enter your browser to download video with best quality.
+http://localhost:3030/video/[VIDEO_ID]
+
+# Enter your browser to download video with Specific options.
+http://localhost:3030/video/[VIDEO_ID]?filename=something&resolution=720
+
+# Enter your browser to download audio with best quality.
+http://localhost:3030/audio/[AUDIO_ID]
+
+# Enter your browser to download audio with specific options.
+http://localhost:3030/audio/[AUDIO_ID]?filename=[SOMETHING]&bitrate=320
+```

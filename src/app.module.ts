@@ -1,10 +1,19 @@
 import { Module } from '@nestjs/common';
-import { VideoModule } from './video/video.module';
-import { HealthModule } from './health/health.module';
+import { ConfigModule } from '@nestjs/config';
 import { AudioModule } from './audio/audio.module';
+import { HealthModule } from './health/health.module';
+import { VideoModule } from './video/video.module';
 
 @Module({
-  imports: [VideoModule, HealthModule, AudioModule],
+  imports: [
+    ConfigModule.forRoot({
+      envFilePath: '.env',
+      isGlobal: true,
+    }),
+    VideoModule,
+    HealthModule,
+    AudioModule,
+  ],
   controllers: [],
   providers: [],
 })

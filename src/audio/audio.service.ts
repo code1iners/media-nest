@@ -14,11 +14,13 @@ export class AudioService {
     response.setHeader('Content-Type', 'audio/mpeg');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="${filename}.mp3"`,
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}.mp3`,
     );
 
     // Set format.
-    const format = bitrate ? `bestaudio[abr<=${bitrate}]` : `bestaudio`;
+    const format = bitrate
+      ? `bestaudio[abr<=${bitrate}]/best`
+      : `bestaudio/best`;
 
     // Process.
     const process = youtubeExec(
@@ -27,6 +29,7 @@ export class AudioService {
         output: '-',
         format: format,
         ignoreErrors: true, // Keep going when developed errors.
+        audioFormat: 'mp3',
         // dumpSingleJson: true, // Show metadata of the video.
       },
       { stdio: ['ignore', 'pipe', 'ignore'] },
@@ -36,20 +39,38 @@ export class AudioService {
     const passThrough = new PassThrough();
     process.stdout.pipe(passThrough);
 
+    process.on('error', (err) => {
+      this.logger.error(err);
+    });
+
+    process.on('close', (code) => {
+      if (code !== 0) {
+        this.logger.error(`youtube-dl exited with code ${code}`);
+      }
+    });
+
     passThrough.pipe(response);
   }
 
   getAudio(input: GetAudioInput, response: Response) {
-    const { url, bitrate, filename = generate({ length: 15 }) } = input;
+    try {
+      const { url, bitrate, filename = generate({ length: 15 }) } = input;
 
-    this.process(url, filename, bitrate, response);
+      this.process(url, filename, bitrate, response);
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 
   getAudioById(videoId: string, input: GetAudioByIdInput, response: Response) {
-    const { bitrate, filename = generate({ length: 15 }) } = input;
+    try {
+      const { bitrate, filename = generate({ length: 15 }) } = input;
 
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-    this.process(url, filename, bitrate, response);
+      this.process(url, filename, bitrate, response);
+    } catch (err) {
+      this.logger.error(err);
+    }
   }
 }

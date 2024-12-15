@@ -19,7 +19,7 @@ export class VideoService {
     response.setHeader('Content-Type', 'video/mp4');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="${filename}.mp4"`,
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}.mp4`,
     );
 
     // Set format.
@@ -42,6 +42,16 @@ export class VideoService {
     // Piping stream data.
     const passThrough = new PassThrough();
     process.stdout.pipe(passThrough);
+
+    process.on('error', (err) => {
+      this.logger.error(err);
+    });
+
+    process.on('close', (code) => {
+      if (code !== 0) {
+        this.logger.error(`youtube-dl exited with code ${code}`);
+      }
+    });
 
     passThrough.pipe(response);
   }
