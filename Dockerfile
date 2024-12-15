@@ -1,17 +1,20 @@
+# Step 1: Build stage.
 FROM node:20
 
+# Set workspace directory.
 WORKDIR /app
 
+# Copy package.json and package-lock.json.
 COPY package*.json ./
 
-RUN npm ci 
+# Install dependencies 
+RUN npm install
 
-ENV NODE_ENV production
-
+# Copy source code.
 COPY . .
 
-USER node
+# Build application.
+RUN npm run build
 
-EXPOSE 3000
-
-CMD [ "npm", "start" ]
+# NestJS 앱 실행
+CMD ["node", "dist/main"]
