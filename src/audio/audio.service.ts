@@ -30,8 +30,7 @@ export class AudioService {
       ? `bestaudio[abr<=${bitrate}]/best`
       : `bestaudio/best`;
 
-    const tempFilePath = resolve(process.cwd(), finalFileName);
-    console.log(tempFilePath);
+    const tempFilePath = resolve(__dirname, '../downloads', finalFileName);
 
     // Process.
     const downloadProcess = youtubeExec(

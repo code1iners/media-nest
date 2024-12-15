@@ -35,7 +35,7 @@ export class VideoService {
       ? `bestvideo[height<=${resolution}]+bestaudio/best`
       : `bestvideo+bestaudio/best`;
 
-    const tempFilePath = resolve(process.cwd(), finalFileName);
+    const tempFilePath = resolve(__dirname, '../downloads', finalFileName);
 
     // Process.
     const downloadProcess = youtubeExec(url, {
