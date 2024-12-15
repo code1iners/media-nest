@@ -2,7 +2,7 @@ import { generate } from '@ce1pers/random-helpers';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { PassThrough } from 'stream';
+import { unlinkSync } from 'fs';
 import { exec as youtubeExec } from 'youtube-dl-exec';
 import { GetAudioByIdInput, GetAudioInput } from './dto/get-audio.dto';
 
@@ -27,36 +27,42 @@ export class AudioService {
       ? `bestaudio[abr<=${bitrate}]/best`
       : `bestaudio/best`;
 
+    const tempFilePath = `/tmp/${filename}.mp3`;
+
+    console.log(tempFilePath);
+
     // Process.
     const process = youtubeExec(
       url,
       {
-        output: '-',
+        output: tempFilePath,
         format: format,
         ignoreErrors: true, // Keep going when developed errors.
         audioFormat: 'mp3',
         extractAudio: true,
         ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
+        addMetadata: true,
         // dumpSingleJson: true, // Show metadata of the video.
       },
       { stdio: ['ignore', 'pipe', 'ignore'] },
     );
-
-    // Piping stream data.
-    const passThrough = new PassThrough();
-    process.stdout.pipe(passThrough);
 
     process.on('error', (err) => {
       this.logger.error(err);
     });
 
     process.on('close', (code) => {
-      if (code !== 0) {
+      this.logger.log(`code = ${code}`);
+
+      if (code === 0) {
+        response.sendFile(tempFilePath, () => {
+          unlinkSync(tempFilePath);
+        });
+      } else {
         this.logger.error(`youtube-dl exited with code ${code}`);
+        response.status(500).send('Error generating audio file');
       }
     });
-
-    passThrough.pipe(response);
   }
 
   getAudio(input: GetAudioInput, response: Response) {
