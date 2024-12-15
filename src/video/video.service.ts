@@ -3,18 +3,18 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { PassThrough } from 'stream';
 import { exec as youtubeExec } from 'youtube-dl-exec';
-import { GetVideoInput } from './dto/get-video.dto';
+import { GetVideoByIdInput, GetVideoInput } from './dto/get-video.dto';
 
 @Injectable()
 export class VideoService {
   private readonly logger = new Logger(VideoService.name);
 
-  getVideo(videoId: string, input: GetVideoInput, response: Response) {
-    const { filename = generate({ length: 15 }), resolution } = input;
-
-    // Set video url.
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-
+  process(
+    url: string,
+    filename: string,
+    resolution: number,
+    response: Response,
+  ) {
     // Set headers.
     response.setHeader('Content-Type', 'video/mp4');
     response.setHeader(
@@ -44,5 +44,20 @@ export class VideoService {
     process.stdout.pipe(passThrough);
 
     passThrough.pipe(response);
+  }
+
+  getVideoById(videoId: string, input: GetVideoByIdInput, response: Response) {
+    const { filename = generate({ length: 15 }), resolution } = input;
+
+    // Set video url.
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+
+    this.process(url, filename, resolution, response);
+  }
+
+  getVideo(input: GetVideoInput, response: Response) {
+    const { url, filename = generate({ length: 15 }), resolution } = input;
+
+    this.process(url, filename, resolution, response);
   }
 }
