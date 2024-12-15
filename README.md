@@ -61,6 +61,18 @@ http://localhost:3030/audio/[AUDIO_ID]
 http://localhost:3030/audio/[AUDIO_ID]?filename=[SOMETHING]&bitrate=320
 ```
 
+#### 5. Stop Application.
+
+```bash
+# Show your services.
+docker ps
+# CONTAINER_ID, IMAGE, COMMAND, CREATED, STATUS, PORTS, NAMES
+# 143065e2eb6a, media-nest, "docker-entrypoint.s…", 5 seconds ago, Up 5 seconds, 0.0.0.0:3030->3030/tcp, friendly_ritchie
+
+# Stop media nest application.
+docker stop [CONTAINER_ID] # CONTAINER_ID = 143065e2eb6a
+```
+
 ## Errors
 
 ### FFMPEG Issue
