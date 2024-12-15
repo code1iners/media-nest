@@ -10,7 +10,7 @@ export class VideoService {
   private readonly logger = new Logger(VideoService.name);
 
   getVideo(videoId: string, input: GetVideoInput, response: Response) {
-    const { filename = generate({ length: 15 }), resolution = 360 } = input;
+    const { filename = generate({ length: 15 }), resolution } = input;
 
     // Set video url.
     const url = `https://www.youtube.com/watch?v=${videoId}`;
@@ -23,7 +23,9 @@ export class VideoService {
     );
 
     // Set format.
-    const format = `bestvideo[height<=${resolution}]+bestaudio/best`;
+    const format = resolution
+      ? `bestvideo[height<=${resolution}]+bestaudio/best`
+      : `bestvideo+bestaudio/best`;
 
     // Process.
     const process = youtubeExec(
