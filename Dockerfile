@@ -6,6 +6,8 @@ COPY package*.json ./
 
 RUN npm ci 
 
+ENV NODE_ENV production
+
 COPY . .
 
 USER node
