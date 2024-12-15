@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { unlinkSync } from 'fs';
+import { resolve } from 'path';
 import { exec as youtubeExec } from 'youtube-dl-exec';
 import { GetAudioByIdInput, GetAudioInput } from './dto/get-audio.dto';
 
@@ -12,14 +13,16 @@ export class AudioService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  process(url: string, filename: string, bitrate: number, response: Response) {
+  download(url: string, filename: string, bitrate: number, response: Response) {
     this.logger.log(url, filename, bitrate);
+
+    const finalFileName = `${filename}.mp4`;
 
     // Set headers.
     response.setHeader('Content-Type', 'audio/mpeg');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}.mp3`,
+      `attachment; filename*=UTF-8''${encodeURIComponent(finalFileName)}`,
     );
 
     // Set format.
@@ -27,12 +30,11 @@ export class AudioService {
       ? `bestaudio[abr<=${bitrate}]/best`
       : `bestaudio/best`;
 
-    const tempFilePath = `/tmp/${filename}.mp3`;
-
+    const tempFilePath = resolve(process.cwd(), finalFileName);
     console.log(tempFilePath);
 
     // Process.
-    const process = youtubeExec(
+    const downloadProcess = youtubeExec(
       url,
       {
         output: tempFilePath,
@@ -47,11 +49,11 @@ export class AudioService {
       // { stdio: ['ignore', 'pipe', 'ignore'] },
     );
 
-    process.on('error', (err) => {
+    downloadProcess.on('error', (err) => {
       this.logger.error(err);
     });
 
-    process.on('close', (code) => {
+    downloadProcess.on('close', (code) => {
       this.logger.log(`code = ${code}`);
 
       if (code === 0) {
@@ -71,7 +73,7 @@ export class AudioService {
     try {
       const { url, bitrate, filename = generate({ length: 15 }) } = input;
 
-      this.process(url, filename, bitrate, response);
+      this.download(url, filename, bitrate, response);
     } catch (err) {
       this.logger.error(err);
     }
@@ -83,7 +85,7 @@ export class AudioService {
 
       const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-      this.process(url, filename, bitrate, response);
+      this.download(url, filename, bitrate, response);
     } catch (err) {
       this.logger.error(err);
     }

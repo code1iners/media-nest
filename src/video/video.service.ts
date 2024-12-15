@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { unlinkSync } from 'fs';
+import { resolve } from 'path';
 import { exec as youtubeExec } from 'youtube-dl-exec';
 import { GetVideoByIdInput, GetVideoInput } from './dto/get-video.dto';
 
@@ -12,7 +13,7 @@ export class VideoService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  process(
+  download(
     url: string,
     filename: string,
     resolution: number,
@@ -21,7 +22,6 @@ export class VideoService {
     this.logger.log(url, filename, resolution);
 
     const finalFileName = `${filename}.mp4`;
-    const deleteFilePath = `${finalFileName}.webm`;
 
     // Set headers.
     response.setHeader('Content-Type', 'video/mp4');
@@ -35,10 +35,10 @@ export class VideoService {
       ? `bestvideo[height<=${resolution}]+bestaudio/best`
       : `bestvideo+bestaudio/best`;
 
-    const tempFilePath = `/tmp/${finalFileName}`;
+    const tempFilePath = resolve(process.cwd(), finalFileName);
 
     // Process.
-    const process = youtubeExec(url, {
+    const downloadProcess = youtubeExec(url, {
       output: tempFilePath,
       format: format,
       ignoreErrors: true, // Keep going when developed errors.
@@ -47,20 +47,20 @@ export class VideoService {
       // dumpSingleJson: true, // Show metadata of the video.
     });
 
-    process.on('error', (err) => {
+    downloadProcess.on('error', (err) => {
       this.logger.error(err);
     });
 
-    process.on('close', (code) => {
+    downloadProcess.on('close', (code) => {
       this.logger.log(`code = ${code}`);
 
       if (code === 0) {
-        response.sendFile(deleteFilePath, () => {
-          unlinkSync(deleteFilePath);
+        response.sendFile(`${tempFilePath}.webm`, () => {
+          unlinkSync(`${tempFilePath}.webm`);
           this.logger.log(`successfully Downloaded.`);
         });
       } else {
-        unlinkSync(deleteFilePath);
+        unlinkSync(`${tempFilePath}.webm`);
         this.logger.error(`youtube-dl exited with code ${code}`);
         response.status(500).send('Error generating audio file');
       }
@@ -74,7 +74,7 @@ export class VideoService {
       // Set video url.
       const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-      this.process(url, filename, resolution, response);
+      this.download(url, filename, resolution, response);
     } catch (err) {
       this.logger.error(err);
     }
@@ -84,7 +84,7 @@ export class VideoService {
     try {
       const { url, filename = generate({ length: 15 }), resolution } = input;
 
-      this.process(url, filename, resolution, response);
+      this.download(url, filename, resolution, response);
     } catch (err) {
       this.logger.error(err);
     }
