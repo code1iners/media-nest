@@ -6,7 +6,7 @@ async function bootstrap() {
 
   const allowedOrigins = [
     'http://localhost:5959',
-    'https://codia-api.codeliners.cc',
+    'chrome-extension://ioeimgdkibkanjcldfbbpmpabiibdkom',
   ];
 
   const app = await NestFactory.create(AppModule);
@@ -14,7 +14,6 @@ async function bootstrap() {
   // Add CORS configs.
   app.enableCors({
     origin: (origin, callback) => {
-      console.log(origin);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
