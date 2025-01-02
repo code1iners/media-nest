@@ -89,6 +89,10 @@ ps aux | grep codia-api
 kill 26897
 ```
 
+# Client service
+
+You can also use this service by chrome extension. If you are interested, check [this](<[https;//](https://github.com/code1iners/media-chrome-extension)>) out.
+
 # Issues
 
 ## FFMPEG Issue
