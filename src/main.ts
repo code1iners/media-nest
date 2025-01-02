@@ -7,6 +7,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:5959',
     'chrome-extension://ioeimgdkibkanjcldfbbpmpabiibdkom',
+    'extension://ioeimgdkibkanjcldfbbpmpabiibdkom',
   ];
 
   const app = await NestFactory.create(AppModule);
