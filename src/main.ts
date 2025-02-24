@@ -19,16 +19,17 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Add CORS configs.
-  app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.log('origin ', origin);
-        callback(new Error('Not allowed by CORS'), false);
-      }
-    },
-  });
+  app.enableCors();
+  // app.enableCors({
+  //   origin: (origin, callback) => {
+  //     if (!origin || allowedOrigins.includes(origin)) {
+  //       callback(null, true);
+  //     } else {
+  //       console.log('origin ', origin);
+  //       callback(new Error('Not allowed by CORS'), false);
+  //     }
+  //   },
+  // });
   await app.listen(port);
 }
 bootstrap();
