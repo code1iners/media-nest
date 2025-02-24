@@ -93,6 +93,11 @@ kill 26897
 
 You can also use this service by chrome extension. If you are interested, check [this](<[https;//](https://github.com/code1iners/media-chrome-extension)>) out.
 
+## Caution
+
+If you want to use client service(extension). You have to add Environment variable(EXTENSION_ID) into .env.production file.
+You can get extension `ID` on your [Extension program management](chrome://extensions/)(chrome://extensions/)
+
 # Issues
 
 ## FFMPEG Issue
