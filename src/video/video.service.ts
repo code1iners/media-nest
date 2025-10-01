@@ -19,13 +19,15 @@ export class VideoService {
     resolution: number,
     response: Response,
   ) {
-    this.logger.log(url, filename, resolution);
+    this.logger.log({ url, filename, resolution });
+
+    const filenameWithExt = `${filename}.mp4`;
 
     // Set headers.
     response.setHeader('Content-Type', 'video/mp4');
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      `attachment; filename*=UTF-8''${encodeURIComponent(filenameWithExt)}`,
     );
 
     // Set download directory.
@@ -36,31 +38,33 @@ export class VideoService {
       ? `bestvideo[height<=${resolution}]+bestaudio/best`
       : `bestvideo+bestaudio/best`;
 
-    const downloadedPath = resolve(outputDir, filename);
+    const downloadedPath = resolve(
+      outputDir,
+      encodeURIComponent(filenameWithExt),
+    );
 
     // Process.
     const downloadProcess = youtubeExec(url, {
+      ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
       output: downloadedPath,
       format: format,
+      mergeOutputFormat: 'mp4',
       ignoreErrors: true, // Keep going when developed errors.
-      ffmpegLocation: this.configService.get('FFMPEG_LOCATION'),
       addMetadata: true,
-      // dumpSingleJson: true, // Show metadata of the video.
-    });
-
-    downloadProcess.on('error', (err) => {
-      this.logger.error(err);
+      writeInfoJson: true,
     });
 
     downloadProcess.on('close', (code) => {
       this.logger.log(`code = ${code}, downloadedPath = ${downloadedPath}`);
 
       if (code === 0) {
-        response.sendFile(`${downloadedPath}.webm`, (err) => {
-          this.logger.log(`successfully Downloaded.`);
+        response.sendFile(downloadedPath, (err) => {
           if (err) {
+            this.logger.error(err.message);
             return response.status(500).send(err.message);
           }
+
+          this.logger.log(`successfully Downloaded.`);
 
           readdir(outputDir, (err, files) => {
             if (err) {
@@ -75,10 +79,15 @@ export class VideoService {
           });
         });
       } else {
-        unlinkSync(`${downloadedPath}`);
-        this.logger.error(`youtube-dl exited with code ${code}`);
-        response.status(500).send('Error generating audio file');
+        unlinkSync(downloadedPath);
+
+        response.status(500).send('Failed generating.');
       }
+    });
+
+    downloadProcess.on('error', (err) => {
+      this.logger.error(err);
+      response.status(500).send(err.message);
     });
   }
 
