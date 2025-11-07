@@ -1,5 +1,5 @@
 # Step 1: Build stage.
-FROM node:20
+FROM node:22
 
 # FFmpeg 설치
 RUN apt-get update && \
