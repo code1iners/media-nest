@@ -51,35 +51,40 @@ export class VideoService {
       mergeOutputFormat: 'mp4',
       ignoreErrors: true, // Keep going when developed errors.
       addMetadata: true,
-      writeInfoJson: true,
+      // writeInfoJson: true,
     });
 
     downloadProcess.on('close', (code) => {
       this.logger.log(`code = ${code}, downloadedPath = ${downloadedPath}`);
-
-      if (code === 0) {
-        response.sendFile(downloadedPath, (err) => {
-          if (err) {
-            this.logger.error(err.message);
-            return response.status(500).send(err.message);
-          }
-
-          this.logger.log(`successfully Downloaded.`);
-
-          readdir(outputDir, (err, files) => {
+      try {
+        if (code === 0) {
+          response.sendFile(downloadedPath, (err) => {
             if (err) {
+              this.logger.error(err.message);
               return response.status(500).send(err.message);
             }
 
-            this.logger.log(`files = ${files}`);
+            this.logger.log(`successfully Downloaded.`);
 
-            files.forEach((file) => {
-              unlinkSync(`${outputDir}/${file}`);
+            readdir(outputDir, (err, files) => {
+              if (err) {
+                return response.status(500).send(err.message);
+              }
+
+              this.logger.log(`files = ${files}`);
+
+              files.forEach((file) => {
+                unlinkSync(`${outputDir}/${file}`);
+              });
             });
           });
-        });
-      } else {
-        unlinkSync(downloadedPath);
+        } else {
+          unlinkSync(downloadedPath);
+
+          response.status(500).send('Failed generating.');
+        }
+      } catch (err) {
+        this.logger.error(err);
 
         response.status(500).send('Failed generating.');
       }
