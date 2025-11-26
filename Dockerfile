@@ -22,5 +22,8 @@ COPY . .
 # Build application.
 RUN npm run build
 
+# 포트 설정
+EXPOSE 3030
+
 # NestJS 앱 실행
 CMD ["node", "dist/main"]
