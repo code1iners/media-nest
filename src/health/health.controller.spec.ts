@@ -15,4 +15,8 @@ describe('HealthController', () => {
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
+
+  it('returns the process health response', () => {
+    expect(controller.health()).toEqual({ ok: true });
+  });
 });

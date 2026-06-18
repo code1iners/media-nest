@@ -1,14 +1,23 @@
 import { BadRequestException } from '@nestjs/common';
-import { Response } from 'express';
+import { generate } from '@ce1pers/random-helpers';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import {
+  AudioIdRequestInput,
+  AudioMediaRequest,
+  AudioUrlRequestInput,
+  VideoIdRequestInput,
+  VideoMediaRequest,
+  VideoUrlRequestInput,
+} from './media-request.model';
+import {
+  createUrlMediaSource,
+  createYoutubeIdMediaSource,
+} from './media-source-policy';
 
 /** URL query에서 들어오는 숫자형 입력값. */
 export type NumericQueryValue = number | string;
-
-/** YouTube 영상 ID 형식. */
-const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 
 /** 경로 탐색을 막기 위해 파일명에서 차단할 문자. */
 const BLOCKED_FILENAME_PATTERN = /[\/\\\0\r\n]/;
@@ -61,35 +70,61 @@ export function parsePositiveInteger(
 
 /** 외부 입력 URL을 http/https URL로 제한한다. */
 export function normalizeSourceUrl(url: string | undefined) {
-  if (!url) {
-    throw new BadRequestException('url is required');
-  }
-
-  try {
-    const parsedUrl = new URL(url);
-
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new Error('Unsupported protocol');
-    }
-
-    return parsedUrl.toString();
-  } catch {
-    throw new BadRequestException('url must be a valid URL');
-  }
+  return createUrlMediaSource(url).url;
 }
 
 /** YouTube 영상 ID를 watch URL로 변환한다. */
 export function createYoutubeWatchUrl(videoId: string) {
-  if (!YOUTUBE_VIDEO_ID_PATTERN.test(videoId)) {
-    throw new BadRequestException('id must be a valid YouTube video id');
-  }
-
-  return `https://www.youtube.com/watch?v=${videoId}`;
+  return createYoutubeIdMediaSource(videoId).url;
 }
 
-/** 비동기 다운로드 실패를 이미 응답한 요청과 충돌하지 않게 보낸다. */
-export function sendDownloadFailure(response: Response, message: string) {
-  if (!response.headersSent) {
-    response.status(500).send(message);
-  }
+/** 파일명 입력이 없을 때 기존 계약인 15자 랜덤 파일명을 만든다. */
+function normalizeRequestFilename(filename: string | undefined) {
+  return normalizeDownloadName(filename || generate({ length: 15 }));
+}
+
+/** URL 기반 오디오 요청을 검증된 request object로 변환한다. */
+export function parseAudioUrlRequest(
+  input: AudioUrlRequestInput,
+): AudioMediaRequest {
+  return {
+    bitrate: parsePositiveInteger(input.bitrate, 'bitrate'),
+    filename: normalizeRequestFilename(input.filename),
+    source: createUrlMediaSource(input.url),
+  };
+}
+
+/** YouTube ID 기반 오디오 요청을 검증된 request object로 변환한다. */
+export function parseAudioIdRequest(
+  videoId: string,
+  input: AudioIdRequestInput,
+): AudioMediaRequest {
+  return {
+    bitrate: parsePositiveInteger(input.bitrate, 'bitrate'),
+    filename: normalizeRequestFilename(input.filename),
+    source: createYoutubeIdMediaSource(videoId),
+  };
+}
+
+/** URL 기반 비디오 요청을 검증된 request object로 변환한다. */
+export function parseVideoUrlRequest(
+  input: VideoUrlRequestInput,
+): VideoMediaRequest {
+  return {
+    filename: normalizeRequestFilename(input.filename),
+    resolution: parsePositiveInteger(input.resolution, 'resolution'),
+    source: createUrlMediaSource(input.url),
+  };
+}
+
+/** YouTube ID 기반 비디오 요청을 검증된 request object로 변환한다. */
+export function parseVideoIdRequest(
+  videoId: string,
+  input: VideoIdRequestInput,
+): VideoMediaRequest {
+  return {
+    filename: normalizeRequestFilename(input.filename),
+    resolution: parsePositiveInteger(input.resolution, 'resolution'),
+    source: createYoutubeIdMediaSource(videoId),
+  };
 }

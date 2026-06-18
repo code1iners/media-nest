@@ -1,51 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
-import { EventEmitter } from 'events';
-import { Response } from 'express';
-import { exec as youtubeExec } from 'youtube-dl-exec';
+import { MediaDownloadService } from '../media/media-download.service';
+import { AudioMediaRequest } from '../media/media-request.model';
 import { AudioService } from './audio.service';
-
-jest.mock('youtube-dl-exec', () => ({
-  exec: jest.fn(),
-}));
 
 describe('AudioService', () => {
   let service: AudioService;
-  let downloadProcess: EventEmitter;
-
-  const youtubeExecMock = jest.mocked(youtubeExec);
-
-  function createResponseMock() {
-    return {
-      headersSent: false,
-      sendFile: jest.fn((path: string, callback: (err?: Error) => void) => {
-        callback();
-      }),
-      setHeader: jest.fn(),
-      status: jest.fn().mockReturnThis(),
-      send: jest.fn(),
-    } as unknown as Response & {
-      sendFile: jest.Mock;
-      setHeader: jest.Mock;
-      status: jest.Mock;
-      send: jest.Mock;
-    };
-  }
+  const mediaDownloadServiceMock = {
+    download: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
-
-    downloadProcess = new EventEmitter();
-    youtubeExecMock.mockReturnValue(downloadProcess as never);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AudioService,
         {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn().mockReturnValue('/usr/bin/ffmpeg'),
-          },
+          provide: MediaDownloadService,
+          useValue: mediaDownloadServiceMock,
         },
       ],
     }).compile();
@@ -57,48 +29,49 @@ describe('AudioService', () => {
     expect(service).toBeDefined();
   });
 
-  it('sends extracted audio as an mp3 download', () => {
-    const response = createResponseMock();
-
-    service.getAudio(
-      {
-        bitrate: '320',
-        filename: 'sample audio',
+  it('creates an mp3 download job with an explicit bitrate format', async () => {
+    /** 검증된 오디오 요청 객체. */
+    const request: AudioMediaRequest = {
+      bitrate: 320,
+      filename: 'sample audio',
+      source: {
+        kind: 'url',
+        safeLabel: 'https://www.youtube.com',
         url: 'https://www.youtube.com/watch?v=abc123_DEF0',
       },
-      response,
-    );
-    downloadProcess.emit('close', 0);
+    };
 
-    expect(response.setHeader).toHaveBeenCalledWith(
-      'Content-Type',
-      'audio/mpeg',
-    );
-    expect(response.setHeader).toHaveBeenCalledWith(
-      'Content-Disposition',
-      "attachment; filename*=UTF-8''sample%20audio.mp3",
-    );
-    expect(youtubeExecMock).toHaveBeenCalledWith(
-      'https://www.youtube.com/watch?v=abc123_DEF0',
-      expect.objectContaining({
-        audioFormat: 'mp3',
-        extractAudio: true,
-        format: 'bestaudio[abr<=320]/best',
-        output: expect.stringMatching(/sample%20audio\.mp3$/),
-      }),
-    );
-    expect(response.sendFile).toHaveBeenCalledWith(
-      expect.stringMatching(/sample%20audio\.mp3$/),
-      expect.any(Function),
-    );
+    await service.getAudio(request);
+
+    expect(mediaDownloadServiceMock.download).toHaveBeenCalledWith({
+      audioFormat: 'mp3',
+      contentType: 'audio/mpeg',
+      downloadName: 'sample audio.mp3',
+      extractAudio: true,
+      failureMessage: 'Error generating audio file',
+      format: 'bestaudio[abr<=320]/best',
+      kind: 'audio',
+      source: request.source,
+    });
   });
 
-  it('rejects invalid audio urls before starting a download', () => {
-    const response = createResponseMock();
+  it('creates an mp3 download job with the default audio format', async () => {
+    /** 검증된 오디오 요청 객체. */
+    const request: AudioMediaRequest = {
+      filename: 'sample audio',
+      source: {
+        kind: 'youtube-id',
+        safeLabel: 'youtube:abc123_DEF0',
+        url: 'https://www.youtube.com/watch?v=abc123_DEF0',
+      },
+    };
 
-    expect(() => service.getAudio({ url: 'not-a-url' }, response)).toThrow(
-      'url must be a valid URL',
+    await service.getAudio(request);
+
+    expect(mediaDownloadServiceMock.download).toHaveBeenCalledWith(
+      expect.objectContaining({
+        format: 'bestaudio/best',
+      }),
     );
-    expect(youtubeExecMock).not.toHaveBeenCalled();
   });
 });

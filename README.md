@@ -30,6 +30,8 @@ cp .env.example .env.production
 - `PORT`: 서버 포트. 기본값은 `3030`
 - `FFMPEG_LOCATION`: ffmpeg 실행 파일 경로
 - `EXTENSION_ID`: Chrome 확장 프로그램 origin 구성을 위한 값
+- `MEDIA_DOWNLOAD_TIMEOUT_MS`: 다운로드 생성 타임아웃. 비워두면 기존처럼 제한하지 않음
+- `MEDIA_DOWNLOAD_CONCURRENCY`: 동시 다운로드 생성 제한. 비워두면 기존처럼 제한하지 않음
 - `EXPECTED_NODE_MAJOR`: 런타임 검증 시 기대하는 Node.js major 버전
 - `EXPECTED_YT_DLP_VERSION`: 런타임 검증 시 기대하는 yt-dlp 버전
 - `EXPECTED_FFMPEG_LOCATION`: 런타임 검증 시 기대하는 ffmpeg 실행 파일 경로
@@ -149,6 +151,13 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 - `id`는 11자 YouTube 영상 ID 형식이어야 한다.
 - `resolution`과 `bitrate`는 양의 정수여야 한다.
 - `filename`에는 경로 구분자나 제어 문자를 넣을 수 없다.
+
+다운로드 처리:
+
+- 요청 검증, 다운로드 생성, HTTP 파일 전송은 분리된 경계에서 처리한다.
+- `youtube-dl-exec` 실행은 adapter 뒤에 격리되어 있고, 서비스는 오디오/비디오 포맷 선택만 담당한다.
+- 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 generic 메시지를 사용한다.
+- non-YouTube `http/https` URL 허용은 현재 호환성을 위해 유지한다. YouTube-only source policy는 별도 결정 후 활성화한다.
 
 ## CORS
 
