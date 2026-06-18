@@ -3,10 +3,10 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 
-describe('AppController (e2e)', () => {
+describe('MediaNest API (e2e)', () => {
   let app: INestApplication;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -15,10 +15,28 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('/health (GET)', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/health')
       .expect(200)
-      .expect('Hello World!');
+      .expect({ ok: true });
+  });
+
+  it('/video rejects invalid urls before starting a download', () => {
+    return request(app.getHttpServer())
+      .get('/video')
+      .query({ url: 'not-a-url' })
+      .expect(400);
+  });
+
+  it('/audio rejects invalid bitrates before starting a download', () => {
+    return request(app.getHttpServer())
+      .get('/audio/abc123_DEF0')
+      .query({ bitrate: '0' })
+      .expect(400);
   });
 });

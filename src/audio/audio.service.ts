@@ -2,9 +2,17 @@ import { generate } from '@ce1pers/random-helpers';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { unlinkSync } from 'fs';
 import { resolve } from 'path';
 import { exec as youtubeExec } from 'youtube-dl-exec';
+import {
+  cleanupMediaWorkDir,
+  createMediaWorkDir,
+  createYoutubeWatchUrl,
+  normalizeDownloadName,
+  normalizeSourceUrl,
+  parsePositiveInteger,
+  sendDownloadFailure,
+} from '../media/media-request.util';
 import { GetAudioByIdInput, GetAudioInput } from './dto/get-audio.dto';
 
 @Injectable()
@@ -13,10 +21,16 @@ export class AudioService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  download(url: string, filename: string, bitrate: number, response: Response) {
+  private download(
+    url: string,
+    filename: string,
+    bitrate: number | undefined,
+    response: Response,
+  ) {
     this.logger.log(url, filename, bitrate);
 
-    const finalFileName = `${filename}.mp4`;
+    /** 응답에 노출할 오디오 파일명. */
+    const finalFileName = `${filename}.mp3`;
 
     // Set headers.
     response.setHeader('Content-Type', 'audio/mpeg');
@@ -30,7 +44,12 @@ export class AudioService {
       ? `bestaudio[abr<=${bitrate}]/best`
       : `bestaudio/best`;
 
-    const tempFilePath = resolve(__dirname, '../downloads', finalFileName);
+    /** 요청별 임시 작업 디렉터리. */
+    const workDir = createMediaWorkDir();
+    /** youtube-dl-exec가 생성할 오디오 파일 경로. */
+    const tempFilePath = resolve(workDir, encodeURIComponent(finalFileName));
+    /** 중복 이벤트로 응답이 두 번 전송되는 것을 막는 상태. */
+    let settled = false;
 
     // Process.
     const downloadProcess = youtubeExec(
@@ -49,44 +68,71 @@ export class AudioService {
     );
 
     downloadProcess.on('error', (err) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       this.logger.error(err);
+      cleanupMediaWorkDir(workDir);
+      sendDownloadFailure(
+        response,
+        err.message || 'Error generating audio file',
+      );
     });
 
     downloadProcess.on('close', (code) => {
       this.logger.log(`code = ${code}`);
 
+      if (settled) {
+        return;
+      }
+
       if (code === 0) {
-        response.sendFile(tempFilePath, () => {
-          unlinkSync(tempFilePath);
+        response.sendFile(tempFilePath, (err) => {
+          settled = true;
+          cleanupMediaWorkDir(workDir);
+
+          if (err) {
+            this.logger.error(err.message);
+            sendDownloadFailure(response, err.message);
+            return;
+          }
+
           this.logger.log(`successfully Downloaded.`);
         });
       } else {
-        unlinkSync(tempFilePath);
+        settled = true;
+        cleanupMediaWorkDir(workDir);
         this.logger.error(`youtube-dl exited with code ${code}`);
-        response.status(500).send('Error generating audio file');
+        sendDownloadFailure(response, 'Error generating audio file');
       }
     });
   }
 
   getAudio(input: GetAudioInput, response: Response) {
-    try {
-      const { url, bitrate, filename = generate({ length: 15 }) } = input;
+    /** 검증된 원본 미디어 URL. */
+    const url = normalizeSourceUrl(input.url);
+    /** 검증된 다운로드 파일명. */
+    const filename = normalizeDownloadName(
+      input.filename || generate({ length: 15 }),
+    );
+    /** 검증된 최대 오디오 비트레이트. */
+    const bitrate = parsePositiveInteger(input.bitrate, 'bitrate');
 
-      this.download(url, filename, bitrate, response);
-    } catch (err) {
-      this.logger.error(err);
-    }
+    this.download(url, filename, bitrate, response);
   }
 
   getAudioById(videoId: string, input: GetAudioByIdInput, response: Response) {
-    try {
-      const { bitrate, filename = generate({ length: 15 }) } = input;
+    /** 검증된 YouTube watch URL. */
+    const url = createYoutubeWatchUrl(videoId);
+    /** 검증된 다운로드 파일명. */
+    const filename = normalizeDownloadName(
+      input.filename || generate({ length: 15 }),
+    );
+    /** 검증된 최대 오디오 비트레이트. */
+    const bitrate = parsePositiveInteger(input.bitrate, 'bitrate');
 
-      const url = `https://www.youtube.com/watch?v=${videoId}`;
-
-      this.download(url, filename, bitrate, response);
-    } catch (err) {
-      this.logger.error(err);
-    }
+    this.download(url, filename, bitrate, response);
   }
 }

@@ -1,29 +1,34 @@
-# Step 1: Build stage.
-FROM node:22
+FROM node:22-slim AS build
 
-# FFmpeg 설치
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM node:22-slim AS production
+
+ENV NODE_ENV=production
+ENV PORT=3030
+
 RUN apt-get update && \
-    apt-get install -y ffmpeg && \
+    apt-get install -y --no-install-recommends ca-certificates ffmpeg && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Set workspace directory.
 WORKDIR /app
 
-# Copy package.json and package-lock.json.
-COPY package*.json ./
+COPY --chown=node:node --from=build /app/package*.json ./
+COPY --chown=node:node --from=build /app/node_modules ./node_modules
+COPY --chown=node:node --from=build /app/dist ./dist
 
-# Install dependencies 
-RUN npm install
+USER node
 
-# Copy source code.
-COPY . .
-
-# Build application.
-RUN npm run build
-
-# 포트 설정
 EXPOSE 3030
 
-# NestJS 앱 실행
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "const port = process.env.PORT || 3030; fetch(`http://127.0.0.1:${port}/health`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"
+
 CMD ["node", "dist/main"]

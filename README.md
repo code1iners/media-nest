@@ -1,119 +1,96 @@
-<p align="center">
-  <img width="422" alt="스크린샷 2024-12-16 12 39 56" src="https://github.com/user-attachments/assets/ff5d6162-1fbb-4426-b915-fabf7bf061ae" />
-</p>
+# Media Nest
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Media Nest는 YouTube 영상 URL 또는 영상 ID를 받아 비디오 파일이나 mp3 오디오 파일을 내려주는 NestJS API 서버다.
 
-<p align="center">A simple media(video/audio) application.</p>
+## Requirements
 
-# Usage
+- Node.js 22
+- npm
+- ffmpeg
 
-## 1. Use `NodeJS`
+## Environment
+
+`.env.example`을 기준으로 실행 환경 파일을 만든다.
 
 ```bash
-# Installation.
-$ npm install
-
-# production mode.
-$ npm run start:prod
-
-# watch mode.
-$ npm run start:dev
+cp .env.example .env.production
 ```
 
-## 2 Use `Docker` (on Background)
+주요 환경 변수:
 
-### 2.1. Build with `Dockerfile`
+- `PORT`: 서버 포트. 기본값은 `3030`
+- `FFMPEG_LOCATION`: ffmpeg 실행 파일 경로
+- `EXTENSION_ID`: Chrome 확장 프로그램 origin 구성을 위한 값
+
+## Run With Node.js
+
+```bash
+npm install
+npm run build
+npm run start:prod
+```
+
+개발 모드:
+
+```bash
+npm run start:dev
+```
+
+## Run With Docker
 
 ```bash
 docker build -t media-nest:latest .
+docker run --env-file .env.production -d -p 3030:3030 media-nest:latest
 ```
 
-### 2.2. Run Application.
+상태 확인:
 
 ```bash
-docker run --env-file .env.production -d -p 3030:3030 media-nest
+curl http://localhost:3030/health
 ```
 
-### 2.3. Check server.
+응답:
 
-```bash
-curl http://localhost:3030/health # {"ok":true}
+```json
+{
+  "ok": true
+}
 ```
 
-### 2.4. Request video or audio.
+## API
 
-```bash
-# Enter your browser to download video with best quality.
-http://localhost:3030/video/[VIDEO_ID]
+비디오 다운로드:
 
-# Enter your browser to download video with Specific options.
-http://localhost:3030/video/[VIDEO_ID]?filename=something&resolution=720
-
-# Enter your browser to download audio with best quality.
-http://localhost:3030/audio/[AUDIO_ID]
-
-# Enter your browser to download audio with specific options.
-http://localhost:3030/audio/[AUDIO_ID]?filename=[SOMETHING]&bitrate=320
+```text
+GET /video?url={MEDIA_URL}
+GET /video/{YOUTUBE_VIDEO_ID}
+GET /video/{YOUTUBE_VIDEO_ID}?filename=sample&resolution=720
 ```
 
-### 2.5. Stop Application.
+오디오 다운로드:
 
-```bash
-# Show your services.
-docker ps
-# CONTAINER_ID, IMAGE, COMMAND, CREATED, STATUS, PORTS, NAMES
-# 143065e2eb6a, media-nest, "docker-entrypoint.s…", 5 seconds ago, Up 5 seconds, 0.0.0.0:3030->3030/tcp, friendly_ritchie
-
-# Stop media nest application.
-docker stop [CONTAINER_ID] # CONTAINER_ID = 143065e2eb6a
+```text
+GET /audio?url={MEDIA_URL}
+GET /audio/{YOUTUBE_VIDEO_ID}
+GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 ```
 
-# Expose my server (use `localtunnel`)
+입력값 검증:
+
+- `url`은 `http` 또는 `https` URL이어야 한다.
+- `id`는 11자 YouTube 영상 ID 형식이어야 한다.
+- `resolution`과 `bitrate`는 양의 정수여야 한다.
+- `filename`에는 경로 구분자나 제어 문자를 넣을 수 없다.
+
+## CORS
+
+현재 Chrome 확장 프로그램 호출에서 CORS 오류가 발생했던 이력이 있어 CORS는 전체 허용 상태로 둔다. `EXTENSION_ID` 기반 allowlist 강제는 확장 프로그램 origin 검증 방식을 확정한 뒤 다시 적용한다.
+
+## Test
 
 ```bash
-# Install globally by nodejs.
-npm i -g localtunnel
-
-# Expose my server on background.
-nohup lt --port 3030 --subdomain codia-api --print-requests > lt.log 2>&1 &
-
-# Stop tunnel.
-ps aux | grep codia-api
-
-# Find lt(localtunnel) service like below.
-# [USER_NAME], 26897, 0.0, 0.1, 422629376, 56640, s001, SN, 12:17PM, 0:00.37, node, /Users/[USER_NAME]/.nvm/versions/node/v20.13.1/bin/lt --port 3030 --subdomain codia-api --print-requests
-
-# Kill localtunnel service.
-kill 26897
-```
-
-# Client service
-
-You can also use this service by chrome extension. If you are interested, check [this](<[https;//](https://github.com/code1iners/media-chrome-extension)>) out.
-
-## Caution
-
-If you want to use client service(extension). You have to add Environment variable(EXTENSION_ID) into .env.production file.
-You can get extension `ID` on your [Extension program management](chrome://extensions/)(chrome://extensions/)
-
-# Issues
-
-## FFMPEG Issue
-
-If you had got some errors, maybe you can need to install `ffmpeg` program on your machine.
-
-### macOS
-
-```bash
-# With homebrew (If you had `homebrew` already)
-brew install ffmpeg
-```
-
-### Windows
-
-```bash
-# With chocolatey (If you had `chocolatey` already)
-choco install ffmpeg
+npm test
+npm run test:e2e
+npm run build
+npm run lint
 ```

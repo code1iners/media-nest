@@ -2,9 +2,17 @@ import { generate } from '@ce1pers/random-helpers';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
-import { readdir, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import { exec as youtubeExec } from 'youtube-dl-exec';
+import {
+  cleanupMediaWorkDir,
+  createMediaWorkDir,
+  createYoutubeWatchUrl,
+  normalizeDownloadName,
+  normalizeSourceUrl,
+  parsePositiveInteger,
+  sendDownloadFailure,
+} from '../media/media-request.util';
 import { GetVideoByIdInput, GetVideoInput } from './dto/get-video.dto';
 
 @Injectable()
@@ -13,14 +21,15 @@ export class VideoService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  download(
+  private download(
     url: string,
     filename: string,
-    resolution: number,
+    resolution: number | undefined,
     response: Response,
   ) {
     this.logger.log({ url, filename, resolution });
 
+    /** 응답에 노출할 비디오 파일명. */
     const filenameWithExt = `${filename}.mp4`;
 
     // Set headers.
@@ -30,18 +39,21 @@ export class VideoService {
       `attachment; filename*=UTF-8''${encodeURIComponent(filenameWithExt)}`,
     );
 
-    // Set download directory.
-    const outputDir = resolve(__dirname, '../downloads');
+    /** 요청별 임시 작업 디렉터리. */
+    const workDir = createMediaWorkDir();
 
     // Set format.
     const format = resolution
       ? `bestvideo[height<=${resolution}]+bestaudio/best`
       : `bestvideo+bestaudio/best`;
 
+    /** youtube-dl-exec가 생성할 비디오 파일 경로. */
     const downloadedPath = resolve(
-      outputDir,
+      workDir,
       encodeURIComponent(filenameWithExt),
     );
+    /** 중복 이벤트로 응답이 두 번 전송되는 것을 막는 상태. */
+    let settled = false;
 
     // Process.
     const downloadProcess = youtubeExec(url, {
@@ -56,67 +68,71 @@ export class VideoService {
 
     downloadProcess.on('close', (code) => {
       this.logger.log(`code = ${code}, downloadedPath = ${downloadedPath}`);
-      try {
-        if (code === 0) {
-          response.sendFile(downloadedPath, (err) => {
-            if (err) {
-              this.logger.error(err.message);
-              return response.status(500).send(err.message);
-            }
 
-            this.logger.log(`successfully Downloaded.`);
+      if (settled) {
+        return;
+      }
 
-            readdir(outputDir, (err, files) => {
-              if (err) {
-                return response.status(500).send(err.message);
-              }
+      if (code === 0) {
+        response.sendFile(downloadedPath, (err) => {
+          settled = true;
+          cleanupMediaWorkDir(workDir);
 
-              this.logger.log(`files = ${files}`);
+          if (err) {
+            this.logger.error(err.message);
+            sendDownloadFailure(response, err.message);
+            return;
+          }
 
-              files.forEach((file) => {
-                unlinkSync(`${outputDir}/${file}`);
-              });
-            });
-          });
-        } else {
-          unlinkSync(downloadedPath);
-
-          response.status(500).send('Failed generating.');
-        }
-      } catch (err) {
-        this.logger.error(err);
-
-        response.status(500).send('Failed generating.');
+          this.logger.log(`successfully Downloaded.`);
+        });
+      } else {
+        settled = true;
+        cleanupMediaWorkDir(workDir);
+        sendDownloadFailure(response, 'Failed generating video file');
       }
     });
 
     downloadProcess.on('error', (err) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
       this.logger.error(err);
-      response.status(500).send(err.message);
+      cleanupMediaWorkDir(workDir);
+      sendDownloadFailure(
+        response,
+        err.message || 'Failed generating video file',
+      );
     });
   }
 
   getVideoById(videoId: string, input: GetVideoByIdInput, response: Response) {
-    try {
-      this.logger.log(`input: ${JSON.stringify(input)}`);
-      const { filename = generate({ length: 15 }), resolution } = input;
+    this.logger.log(`input: ${JSON.stringify(input)}`);
 
-      // Set video url.
-      const url = `https://www.youtube.com/watch?v=${videoId}`;
+    /** 검증된 YouTube watch URL. */
+    const url = createYoutubeWatchUrl(videoId);
+    /** 검증된 다운로드 파일명. */
+    const filename = normalizeDownloadName(
+      input.filename || generate({ length: 15 }),
+    );
+    /** 검증된 최대 영상 높이. */
+    const resolution = parsePositiveInteger(input.resolution, 'resolution');
 
-      this.download(url, filename, resolution, response);
-    } catch (err) {
-      this.logger.error(err);
-    }
+    this.download(url, filename, resolution, response);
   }
 
   getVideo(input: GetVideoInput, response: Response) {
-    try {
-      const { url, filename = generate({ length: 15 }), resolution } = input;
+    /** 검증된 원본 미디어 URL. */
+    const url = normalizeSourceUrl(input.url);
+    /** 검증된 다운로드 파일명. */
+    const filename = normalizeDownloadName(
+      input.filename || generate({ length: 15 }),
+    );
+    /** 검증된 최대 영상 높이. */
+    const resolution = parsePositiveInteger(input.resolution, 'resolution');
 
-      this.download(url, filename, resolution, response);
-    } catch (err) {
-      this.logger.error(err);
-    }
+    this.download(url, filename, resolution, response);
   }
 }
