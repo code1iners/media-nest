@@ -1,0 +1,11 @@
+services:
+  media-nest:
+    build:
+      context: .
+    image: media-nest:latest
+    container_name: media-nest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      - "127.0.0.1:3030:3030"
