@@ -1,0 +1,6 @@
+packages:
+  - "apps/*"
+verifyDepsBeforeRun: false
+allowBuilds:
+  unrs-resolver: true
+  youtube-dl-exec: true

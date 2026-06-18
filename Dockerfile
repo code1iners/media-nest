@@ -6,6 +6,8 @@ ARG EXPECTED_FFMPEG_VERSION=5.1.8
 
 FROM ${NODE_IMAGE} AS build
 
+ENV COREPACK_HOME=/usr/local/share/corepack
+
 WORKDIR /app
 
 RUN apt-get update && \
@@ -13,15 +15,24 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
+RUN mkdir -p ${COREPACK_HOME} && \
+    corepack enable && \
+    corepack prepare pnpm@11.0.8 --activate && \
+    chmod -R a+rX ${COREPACK_HOME}
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/chrome-extension/package.json ./apps/chrome-extension/package.json
 ARG YOUTUBE_DL_HOST
-RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} npm ci
+RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm install --frozen-lockfile
 
 COPY . .
-RUN npm run build
-RUN npm prune --omit=dev
+RUN pnpm --filter api run build
+RUN pnpm --filter api deploy --prod --legacy /prod/api
 
 FROM ${NODE_IMAGE} AS production
+
+ENV COREPACK_HOME=/usr/local/share/corepack
 
 ARG YT_DLP_VERSION
 ARG FFMPEG_VERSION
@@ -42,10 +53,13 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY --chown=node:node --from=build /app/package*.json ./
-COPY --chown=node:node --from=build /app/node_modules ./node_modules
-COPY --chown=node:node --from=build /app/dist ./dist
-COPY --chown=node:node scripts ./scripts
+RUN mkdir -p ${COREPACK_HOME} && \
+    corepack enable && \
+    corepack prepare pnpm@11.0.8 --activate && \
+    chmod -R a+rX ${COREPACK_HOME}
+
+COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --chown=node:node --from=build /prod/api ./apps/api
 
 USER node
 
@@ -53,4 +67,4 @@ EXPOSE 3030
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "const port = process.env.PORT || 3030; fetch('http://127.0.0.1:' + port + '/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"]
 
-CMD ["node", "dist/main"]
+CMD ["node", "apps/api/dist/main"]

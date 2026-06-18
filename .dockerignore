@@ -1,6 +1,13 @@
 node_modules
+apps/*/node_modules
 dist
+apps/*/dist
+coverage
+apps/*/coverage
+.turbo
+apps/*/.turbo
 npm-debug.log
+pnpm-debug.log
 .DS_Store
 .env
 .env.*
