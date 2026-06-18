@@ -1,4 +1,4 @@
-# Media Nest 현재 구현 PRD
+# Media Nest API 현재 구현 PRD
 
 ## 목적
 

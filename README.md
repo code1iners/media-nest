@@ -137,6 +137,8 @@ docker compose up -d --build
 
 ## API
 
+자세한 API 제품 범위와 기능 계약은 `docs/api/current-implementation-prd.md`, `docs/api/current-implementation-fsd.md`를 기준으로 한다.
+
 비디오 다운로드:
 
 ```text
@@ -174,6 +176,8 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 ## Chrome Extension
 
 Chrome 확장 프로그램의 현재 소스 snapshot은 `apps/chrome-extension`에 이관되어 workspace package로 추적한다.
+
+Chrome 확장 프로그램의 제품 범위와 기능 계약은 `docs/chrome-extension/current-implementation-prd.md`, `docs/chrome-extension/current-implementation-fsd.md`를 기준으로 한다.
 
 현재 이관은 소스 보존이 목적이며, 아래 항목은 후속 작업으로 남긴다.
 
