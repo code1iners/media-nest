@@ -184,10 +184,36 @@ Chrome 확장 프로그램의 제품 범위와 기능 계약은 `docs/chrome-ext
 로컬 개발 서버:
 
 ```bash
-pnpm --filter chrome-extension run dev
+pnpm dev
 ```
 
-WXT dev mode는 extension을 설치한 Chromium을 열어 popup UI를 빠르게 확인하는 용도다. 실제 load unpacked 검증은 production build output인 `apps/chrome-extension/.output/chrome-mv3`를 사용한다.
+`pnpm dev`는 API watch server와 WXT extension dev mode를 함께 실행한다. Extension dev task는 API `http://127.0.0.1:3030/health`와 WXT dev output `apps/chrome-extension/.output/chrome-mv3-dev/manifest.json` 준비 상태를 확인하고, 준비되면 개발용 popup preview를 자동으로 연다.
+
+개발 중 바로 보는 UI는 wrapper가 여는 popup preview server다.
+
+```text
+http://localhost:3000/popup.html?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A3030&tabUrl=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0
+```
+
+자동 open을 끄려면 아래처럼 실행한다.
+
+```bash
+MEDIA_NEST_DEV_OPEN_PREVIEW=0 pnpm dev
+```
+
+3000 port가 이미 사용 중이면 다른 preview port를 지정한다.
+
+```bash
+MEDIA_NEST_PREVIEW_PORT=3002 pnpm dev
+```
+
+개발 서버가 켜진 상태에서 popup이 실제로 load unpacked로 뜨는지 빠르게 확인:
+
+```bash
+pnpm dev:smoke
+```
+
+WXT dev mode는 extension을 설치한 Chromium을 열어 실제 popup도 확인할 수 있게 한다. 개발 중 바로 보는 화면은 localhost popup preview이고, 실제 extension runtime 확인은 WXT가 연 Chromium에서 extension popup을 열어 확인한다. 개발 중 빠른 smoke는 dev output인 `apps/chrome-extension/.output/chrome-mv3-dev`를 사용하고, 실제 production load unpacked 검증은 production build output인 `apps/chrome-extension/.output/chrome-mv3`를 사용한다.
 
 확장 프로그램 build output, URL 생성 로직, TypeScript 구조 확인:
 
@@ -203,7 +229,7 @@ pnpm --filter chrome-extension run lint
 pnpm --filter chrome-extension run test:browser
 ```
 
-`test:browser`는 먼저 로컬 API `http://127.0.0.1:3030/health`를 확인하고, WXT production build를 Chromium load unpacked로 렌더링한 뒤, built popup을 브라우저에서 실행해 지원 페이지, 미지원 페이지, 서버 확인, 다운로드 시작 흐름을 검증한다. Chrome Web Store 배포, `EXTENSION_ID` 기반 CORS allowlist 강제, Shorts/`youtu.be` 지원, 다운로드 진행률 표시는 후속 범위다.
+`test:browser`는 먼저 로컬 API `http://127.0.0.1:3030/health`를 확인하고, WXT production build를 Chromium load unpacked로 렌더링한 뒤, built popup을 브라우저에서 실행해 지원 페이지, 미지원 페이지, 서버 확인, 다운로드 시작 흐름을 검증한다. `dev:smoke`는 이미 실행 중인 WXT dev output으로 popup 렌더링만 빠르게 확인하며 production build를 만들지 않는다. Chrome Web Store 배포, `EXTENSION_ID` 기반 CORS allowlist 강제, Shorts/`youtu.be` 지원, 다운로드 진행률 표시는 후속 범위다.
 
 ## Test
 

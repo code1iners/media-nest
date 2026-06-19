@@ -1,6 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalPassThroughEnv": [
+    "PORT",
+    "MEDIA_NEST_API_BASE_URL",
+    "MEDIA_NEST_WXT_DEV_OUTPUT_ROOT",
+    "MEDIA_NEST_WXT_DEV_PORT",
+    "MEDIA_NEST_PREVIEW_PORT",
+    "MEDIA_NEST_DEV_READY_TIMEOUT_MS",
+    "MEDIA_NEST_DEV_READY_INTERVAL_MS",
+    "MEDIA_NEST_DEV_OPEN_PREVIEW"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

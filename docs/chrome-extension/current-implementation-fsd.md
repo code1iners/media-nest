@@ -145,6 +145,9 @@ GET /video/{YOUTUBE_VIDEO_ID}?filename={FILENAME}&resolution={RESOLUTION}
 - 비디오 모드에서 API 비디오 다운로드 URL이 생성된다.
 - API base URL, `filename`, `bitrate`, `resolution` 설정값이 생성 URL에 반영된다.
 - 서버가 꺼져 있을 때 사용자에게 서버 미응답 상태를 보여준다.
+- `pnpm dev`는 API health와 WXT dev output manifest 준비 상태를 터미널에 표시하고, `http://localhost:3000/popup.html` 개발용 preview를 자동으로 열어 popup UI를 바로 볼 수 있게 해야 한다.
+- 개발용 preview는 Chrome extension runtime이 없는 localhost 환경에서만 fake Chrome API를 설치하고, 실제 extension runtime에서는 기존 Chrome API를 그대로 사용해야 한다.
+- `pnpm dev:smoke`는 이미 실행 중인 WXT dev output `.output/chrome-mv3-dev`를 load unpacked로 열어 popup 렌더링을 빠르게 확인한다.
 - `pnpm --filter chrome-extension run build`가 WXT generated manifest, popup asset, 권한, icon 참조를 검증한다.
 - `pnpm --filter chrome-extension run test`가 URL 감지, API URL 생성, storage key 호환성, popup 상태 전이를 검증한다.
 - `pnpm --filter chrome-extension run lint`가 WXT type generation과 TypeScript compile을 검증한다.

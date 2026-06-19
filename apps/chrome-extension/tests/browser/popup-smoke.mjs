@@ -4,17 +4,47 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
-/** WXT production output root. */
-const extensionOutputRoot = path.resolve('.output/chrome-mv3');
+/** Browser smoke 실행 mode. */
+const smokeMode = process.env.MEDIA_NEST_POPUP_SMOKE_MODE ?? 'production';
+/** Dev smoke 여부. */
+const isDevSmoke = smokeMode === 'dev';
+/** Browser smoke mode별 기본 WXT output root. */
+const defaultExtensionOutputRoot = isDevSmoke ? '.output/chrome-mv3-dev' : '.output/chrome-mv3';
+/** WXT output root. */
+const extensionOutputRoot = path.resolve(
+  process.env.MEDIA_NEST_EXTENSION_OUTPUT_ROOT ?? defaultExtensionOutputRoot,
+);
 /** 실제 로컬 Media Nest API base URL. */
 const realApiBaseUrl = process.env.MEDIA_NEST_API_BASE_URL ?? 'http://127.0.0.1:3030';
 
+if (!['production', 'dev'].includes(smokeMode)) {
+  throw new Error(`Unsupported popup smoke mode: ${smokeMode}`);
+}
+
 if (!fs.existsSync(path.join(extensionOutputRoot, 'manifest.json'))) {
-  throw new Error('WXT build output is missing. Run `pnpm --filter chrome-extension run build` first.');
+  throw new Error(createMissingOutputMessage(smokeMode, extensionOutputRoot));
 }
 
 await assertRealApiHealth(realApiBaseUrl);
 console.error('[popup-smoke] real API health ok');
+
+if (isDevSmoke) {
+  await verifyLoadUnpackedPopup(extensionOutputRoot);
+  console.error('[popup-smoke] dev load unpacked popup ok');
+  console.log(
+    JSON.stringify(
+      {
+        mode: smokeMode,
+        outputRoot: extensionOutputRoot,
+        realApiHealth: `${realApiBaseUrl}/health`,
+        status: 'ok',
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(0);
+}
 
 /** Browser smoke용 fake API server. */
 const apiServer = await createApiServer();
@@ -24,7 +54,7 @@ const unavailableApiServer = await createUnavailableApiServer();
 const staticServer = await createStaticServer(extensionOutputRoot);
 
 try {
-  await verifyLoadUnpackedPopup();
+  await verifyLoadUnpackedPopup(extensionOutputRoot);
   console.error('[popup-smoke] load unpacked popup ok');
   await verifyUnsupportedPage(staticServer.origin);
   console.error('[popup-smoke] unsupported page ok');
@@ -37,6 +67,8 @@ try {
     JSON.stringify(
       {
         realApiHealth: `${realApiBaseUrl}/health`,
+        mode: smokeMode,
+        outputRoot: extensionOutputRoot,
         fakeApiRequests: apiServer.requests,
         unavailableFakeApiRequests: unavailableApiServer.requests,
         status: 'ok',
@@ -78,16 +110,16 @@ async function assertRealApiHealth(apiBaseUrl) {
 }
 
 /** WXT build output을 load unpacked로 올린 실제 extension popup 렌더링을 확인한다. */
-async function verifyLoadUnpackedPopup() {
+async function verifyLoadUnpackedPopup(outputRoot) {
   /** Chromium user data dir. */
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'media-nest-extension-'));
 
-  await launchAndCloseExtensionContext(userDataDir);
+  await launchAndCloseExtensionContext(userDataDir, outputRoot);
 
   /** load unpacked extension ID. */
-  const extensionId = await readLoadedExtensionId(userDataDir);
+  const extensionId = await readLoadedExtensionId(userDataDir, outputRoot);
   /** Chromium persistent context. */
-  const context = await launchExtensionContext(userDataDir);
+  const context = await launchExtensionContext(userDataDir, outputRoot);
 
   try {
     /** 실제 extension popup page. */
@@ -104,21 +136,21 @@ async function verifyLoadUnpackedPopup() {
 }
 
 /** Extension context를 열었다가 닫아 Chrome profile에 extension settings를 flush한다. */
-async function launchAndCloseExtensionContext(userDataDir) {
+async function launchAndCloseExtensionContext(userDataDir, outputRoot) {
   /** Chromium persistent context. */
-  const context = await launchExtensionContext(userDataDir);
+  const context = await launchExtensionContext(userDataDir, outputRoot);
 
   await new Promise((resolve) => setTimeout(resolve, 1000));
   await closeBrowserContext(context);
 }
 
 /** Extension이 load unpacked된 Chromium context를 연다. */
-function launchExtensionContext(userDataDir) {
+function launchExtensionContext(userDataDir, outputRoot) {
   return chromium.launchPersistentContext(userDataDir, {
     headless: false,
     args: [
-      `--disable-extensions-except=${extensionOutputRoot}`,
-      `--load-extension=${extensionOutputRoot}`,
+      `--disable-extensions-except=${outputRoot}`,
+      `--load-extension=${outputRoot}`,
     ],
     ignoreDefaultArgs: ['--disable-extensions'],
   });
@@ -249,7 +281,7 @@ async function installFakeChromeApi(page, options) {
 }
 
 /** load unpacked extension ID를 Chrome profile에서 읽는다. */
-async function readLoadedExtensionId(userDataDir) {
+async function readLoadedExtensionId(userDataDir, outputRoot) {
   /** Secure Preferences 경로. */
   const securePreferencesPath = path.join(userDataDir, 'Default', 'Secure Preferences');
 
@@ -261,7 +293,7 @@ async function readLoadedExtensionId(userDataDir) {
       const settings = preferences.extensions?.settings ?? {};
       /** Media Nest extension entry. */
       const extensionEntry = Object.entries(settings).find(
-        ([, value]) => value.path === extensionOutputRoot,
+        ([, value]) => value.path === outputRoot,
       );
 
       if (extensionEntry) {
@@ -273,6 +305,15 @@ async function readLoadedExtensionId(userDataDir) {
   }
 
   throw new Error('Could not find loaded extension ID.');
+}
+
+/** smoke mode에 맞는 output 누락 메시지를 만든다. */
+function createMissingOutputMessage(mode, outputRoot) {
+  if (mode === 'dev') {
+    return `WXT dev output is missing at ${outputRoot}. Run \`pnpm dev\` first and wait for the readiness message.`;
+  }
+
+  return `WXT build output is missing at ${outputRoot}. Run \`pnpm --filter chrome-extension run build\` first.`;
 }
 
 /** Browser context를 timeout과 함께 닫는다. */

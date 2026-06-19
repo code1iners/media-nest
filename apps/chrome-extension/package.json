@@ -5,11 +5,12 @@
   "description": "Media Nest WXT Chrome extension.",
   "scripts": {
     "build": "wxt build && node tools/verify-extension-package.js",
-    "dev": "wxt",
+    "dev": "node tools/run-wxt-dev-ready.js",
     "lint": "wxt prepare && tsc --noEmit",
     "postinstall": "wxt prepare",
     "test": "vitest run",
     "test:browser": "wxt build && node tools/verify-extension-package.js && node tests/browser/popup-smoke.mjs",
+    "test:browser:dev": "MEDIA_NEST_POPUP_SMOKE_MODE=dev node tests/browser/popup-smoke.mjs",
     "zip": "wxt zip"
   },
   "dependencies": {

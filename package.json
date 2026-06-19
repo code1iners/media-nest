@@ -9,6 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "dev:smoke": "pnpm --filter chrome-extension run test:browser:dev",
     "format": "turbo run format",
     "lint": "turbo run lint",
     "test": "turbo run test",
