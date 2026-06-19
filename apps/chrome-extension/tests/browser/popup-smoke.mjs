@@ -129,7 +129,7 @@ async function verifyLoadUnpackedPopup(outputRoot) {
       timeout: 10000,
       waitUntil: 'domcontentloaded',
     });
-    await popupPage.getByRole('heading', { name: 'Media Nest' }).waitFor({ timeout: 10000 });
+    await popupPage.getByRole('heading', { name: 'MyTube Extract' }).waitFor({ timeout: 10000 });
   } finally {
     await closeBrowserContext(context);
   }
@@ -170,7 +170,7 @@ async function verifyUnsupportedPage(origin) {
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, 'Open a YouTube watch page to download media.');
+    await expectStatusText(page, 'YouTube watch 페이지에서 다시 열어주세요.');
     await expectDownloadButtonDisabled(page, true);
   } finally {
     await browser.close();
@@ -194,8 +194,8 @@ async function verifyServerUnavailableFlow(origin, apiOrigin) {
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, 'Ready for video abc123_DEF0.');
-    await page.getByRole('button', { name: 'Start download' }).click();
+    await expectStatusText(page, '현재 영상 감지 완료: abc123_DEF0');
+    await page.getByRole('button', { name: '추출 시작' }).click();
     await expectStatusText(page, 'Server is unavailable.');
 
     /** Fake Chrome downloads API가 요청한 URL. */
@@ -214,7 +214,7 @@ async function verifyDownloadFlow(origin, apiOrigin) {
   /** Browser instance. */
   const browser = await chromium.launch();
   /** Browser page. */
-  const page = await browser.newPage();
+  const page = await browser.newPage({ viewport: { width: 360, height: 600 } });
 
   try {
     await installFakeChromeApi(page, {
@@ -228,10 +228,11 @@ async function verifyDownloadFlow(origin, apiOrigin) {
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, 'Ready for video abc123_DEF0.');
+    await expectStatusText(page, '현재 영상 감지 완료: abc123_DEF0');
     await expectDownloadButtonDisabled(page, false);
-    await page.getByRole('button', { name: 'Start download' }).click();
-    await expectStatusText(page, 'Download started.');
+    await expectDownloadButtonVisibleInViewport(page);
+    await page.getByRole('button', { name: '추출 시작' }).click();
+    await expectStatusText(page, '추출 요청을 시작했습니다.');
 
     /** Fake Chrome downloads API가 요청한 URL. */
     const downloadUrl = await page.evaluate(() => globalThis.__mediaNestDownloadUrl);
@@ -335,11 +336,32 @@ async function expectStatusText(page, expectedText) {
 async function expectDownloadButtonDisabled(page, expectedDisabled) {
   /** Download button disabled 여부. */
   const disabled = await page
-    .getByRole('button', { name: 'Start download' })
+    .getByRole('button', { name: '추출 시작' })
     .evaluate((button) => button.disabled);
 
   if (disabled !== expectedDisabled) {
     throw new Error(`Expected download button disabled=${expectedDisabled}, got ${disabled}`);
+  }
+}
+
+/** 360x600 popup viewport에서 주요 다운로드 버튼이 바로 보이는지 확인한다. */
+async function expectDownloadButtonVisibleInViewport(page) {
+  /** Download button 위치와 viewport 크기. */
+  const metrics = await page.getByRole('button', { name: '추출 시작' }).evaluate((button) => {
+    /** Download button viewport 기준 rect. */
+    const rect = button.getBoundingClientRect();
+
+    return {
+      bottom: rect.bottom,
+      innerHeight: window.innerHeight,
+      top: rect.top,
+    };
+  });
+
+  if (metrics.top < 0 || metrics.bottom > metrics.innerHeight - 12) {
+    throw new Error(
+      `Expected download button within 360x600 popup viewport, got top=${metrics.top}, bottom=${metrics.bottom}, innerHeight=${metrics.innerHeight}`,
+    );
   }
 }
 

@@ -48,7 +48,7 @@ describe('popup download model', () => {
       canDownload: true,
       status: {
         kind: 'ready',
-        message: 'Ready for video abc123_DEF0.',
+        message: '현재 영상 감지 완료: abc123_DEF0',
       },
     });
   });
@@ -69,7 +69,7 @@ describe('popup download model', () => {
       canDownload: false,
       status: {
         kind: 'unsupported-page',
-        message: 'Open a YouTube watch page to download media.',
+        message: 'YouTube watch 페이지에서 다시 열어주세요.',
       },
     });
   });
@@ -94,7 +94,7 @@ describe('popup download model', () => {
       canDownload: false,
       status: {
         kind: 'missing-api-url',
-        message: 'Enter a valid API base URL.',
+        message: '올바른 API 서버 주소를 입력하세요.',
       },
     });
   });
@@ -154,7 +154,7 @@ describe('popup download model', () => {
     );
     expect(model.getSnapshot().status).toMatchObject({
       kind: 'download-started',
-      message: 'Download started.',
+      message: '추출 요청을 시작했습니다.',
     });
   });
 

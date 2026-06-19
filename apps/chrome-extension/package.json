@@ -2,7 +2,7 @@
   "name": "chrome-extension",
   "version": "1.0.0",
   "private": true,
-  "description": "Media Nest WXT Chrome extension.",
+  "description": "MyTube Extract WXT Chrome extension.",
   "scripts": {
     "build": "wxt build && node tools/verify-extension-package.js",
     "dev": "node tools/run-wxt-dev-ready.js",
