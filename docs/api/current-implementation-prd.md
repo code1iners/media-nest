@@ -4,7 +4,7 @@
 
 Media Nest는 사용자가 YouTube 영상 URL 또는 영상 ID를 기반으로 비디오나 오디오 파일을 다운로드할 수 있게 하는 단순 미디어 변환 API 서버다.
 
-현재 제품 범위는 웹 UI가 아니라 HTTP API 제공에 집중한다. 사용자는 브라우저, Chrome 확장 프로그램, curl 같은 HTTP 클라이언트에서 엔드포인트를 호출해 미디어 파일 다운로드 응답을 받는다. Chrome 확장 프로그램 소스는 monorepo의 `apps/chrome-extension`에 이관되어 있지만, 실제 API 호출 UI와 깨진 asset 경로 수정은 후속 작업 범위다.
+현재 제품 범위는 웹 UI가 아니라 HTTP API 제공에 집중한다. 사용자는 브라우저, Chrome 확장 프로그램, curl 같은 HTTP 클라이언트에서 엔드포인트를 호출해 미디어 파일 다운로드 응답을 받는다. Chrome 확장 프로그램 MVP는 monorepo의 `apps/chrome-extension`에서 WXT + React popup으로 구현되어 있으며, 일반 YouTube watch 탭에서 이 API 계약을 소비한다.
 
 ## 대상 사용자
 

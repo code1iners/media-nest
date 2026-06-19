@@ -1,7 +1,0 @@
-@import url("./reset.css");
-
-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}

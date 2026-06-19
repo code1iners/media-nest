@@ -2,18 +2,20 @@
 
 ## 문서 기준
 
-이 문서는 Chrome 확장 프로그램이 Media Nest API 서버를 소비하는 방식과 현재 snapshot의 한계를 정리한다. API 서버 자체의 요청/응답 계약은 `docs/api/current-implementation-fsd.md`를 기준으로 하며, 여기서는 확장 프로그램의 화면, 상태, 설정, API 호출 조합을 다룬다.
+이 문서는 Chrome 확장 프로그램이 Media Nest API 서버를 소비하는 방식과 현재 MVP의 한계를 정리한다. API 서버 자체의 요청/응답 계약은 `docs/api/current-implementation-fsd.md`를 기준으로 하며, 여기서는 확장 프로그램의 화면, 상태, 설정, API 호출 조합을 다룬다.
 
 ## 현재 소스 상태
 
 - 확장 프로그램 소스는 `apps/chrome-extension` workspace package가 소유한다.
-- `manifest.json`은 Manifest V3 형식이고 popup entry로 `./popup/popup.html`을 사용한다.
-- `manifest.json`의 content script는 현재 존재하지 않는 `index.js`를 참조한다.
-- `popup/popup.html`은 `./styles/index.css`, `./scripts/popup.js`를 참조하지만, 실제 파일은 popup 폴더의 상위 `styles/`, `scripts/` 아래에 있다.
-- `scripts/content.js`는 현재 페이지 title을 alert로 띄우는 snapshot 코드만 가진다.
-- `scripts/popup.js`는 `Enabled` checkbox와 임의 version 표시만 처리하며, 활성 탭 URL 감지, YouTube video ID 추출, API 호출은 구현되어 있지 않다.
-- `background.js`는 빈 파일이다.
-- `package.json`의 build/lint/test script는 실제 bundle 생성을 하지 않고 snapshot 존재만 확인하는 수준이다.
+- WXT가 Manifest V3 build output을 생성하며 source `manifest.json`은 두지 않는다.
+- popup entrypoint는 `entrypoints/popup/index.html`과 `entrypoints/popup/main.tsx`가 소유한다.
+- popup 중심 MVP이므로 `content_scripts`와 background entrypoint는 사용하지 않는다.
+- React popup UI는 `src/app/popup-app.tsx`와 `src/features/popup-download/ui/` 아래에서 관리한다.
+- `src/features/popup-download/popup-download-model.ts`는 popup 초기화, 현재 탭 감지, 설정 저장/로드, `/health` 확인, 다운로드 시작 상태 전이를 담당한다.
+- `src/adapters/chrome/`는 `chrome.tabs`, `chrome.storage`, `chrome.downloads` callback API를 Promise 기반 adapter로 감싼다.
+- `src/domain/youtube/`, `src/domain/download-options/`, `src/services/media-nest/`는 Chrome runtime 없이 테스트 가능한 YouTube video ID 감지와 API URL 생성을 담당한다.
+- `public/icon-*.png`는 WXT가 generated manifest icon으로 발견해 build output에 복사한다.
+- `package.json`의 build script는 WXT production build 후 generated manifest/popup 정적 파일 참조와 permission을 검증하고, test script는 URL 감지, API URL 생성, popup 상태 전이를 검증한다.
 
 ## 목표 동작
 
@@ -91,7 +93,7 @@ GET /video/{YOUTUBE_VIDEO_ID}?filename={FILENAME}&resolution={RESOLUTION}
 
 - 우선 지원 대상은 `youtube.com/watch?v={id}` 형식의 일반 YouTube watch URL이다.
 - video ID는 API 서버와 동일하게 11자 YouTube 영상 ID 형식을 기준으로 다룬다.
-- `youtu.be/{id}`와 YouTube Shorts URL 지원은 구현 시 함께 고려할 수 있지만, MVP 문서의 필수 성공 조건은 일반 watch URL이다.
+- `youtu.be/{id}`와 YouTube Shorts URL 지원은 현재 후속 보류 사항이며, MVP의 필수 성공 조건은 일반 watch URL이다.
 - 지원하지 않는 URL에서는 API 호출 URL을 만들지 않는다.
 
 ## Popup 상태
@@ -112,26 +114,26 @@ GET /video/{YOUTUBE_VIDEO_ID}?filename={FILENAME}&resolution={RESOLUTION}
 
 - `activeTab`은 현재 탭 URL 감지에 사용한다.
 - `storage`는 API base URL과 기본 옵션 저장에 사용한다.
-- `downloads` 권한은 Chrome downloads API로 다운로드를 시작하기로 결정할 경우 필요하다.
-- `content_scripts`는 popup 중심 MVP에서는 필수로 보지 않는다. 필요하지 않다면 잘못된 `index.js` 참조를 제거한다.
+- `downloads` 권한은 Chrome downloads API로 다운로드를 시작하는 데 사용한다.
+- `content_scripts`는 popup 중심 MVP에서는 사용하지 않는다.
 - `host_permissions`는 최소한 API base URL과 YouTube URL 감지 범위에 맞게 좁히는 방향을 후속 검토한다.
+- manifest 값은 `wxt.config.ts`와 WXT popup entrypoint에서 생성되며, production output은 `.output/chrome-mv3/manifest.json`에 생성된다.
 
 ### Popup
 
-- popup HTML은 실제 CSS/JS 상대 경로와 일치해야 한다.
-- popup script는 활성 탭 조회, URL 감지, 설정 로드/저장, API URL 생성, 다운로드 실행을 담당한다.
+- WXT popup entrypoint는 React app mount와 style import를 담당한다.
+- popup application model은 활성 탭 조회, URL 감지, 설정 로드/저장, API URL 생성, 다운로드 실행을 담당한다.
+- React component는 상태 렌더링과 사용자 입력 전달만 담당한다.
 - UI는 다운로드 모드, 파일명, 오디오 비트레이트, 비디오 해상도, API base URL 설정을 제공한다.
 
 ## 다운로드 실행 방식 결정
 
-구현 시 아래 두 방식 중 하나를 선택한다.
+현재 MVP는 `chrome.downloads.download`를 사용한다. 구현 중 권한 또는 런타임 제약이 확인되면 다운로드 URL을 새 탭 또는 현재 창으로 여는 방식으로 축소할 수 있다.
 
 | 방식 | 장점 | 주의사항 |
 | --- | --- | --- |
 | 다운로드 URL을 새 탭 또는 현재 창으로 열기 | attachment 응답을 브라우저 기본 다운로드 흐름에 맡길 수 있음 | popup 상태에서 시작 결과를 세밀하게 알기 어려움 |
 | `chrome.downloads.download` 사용 | 다운로드 시작 실패를 extension에서 더 명확히 다룰 수 있음 | `downloads` 권한과 URL 접근 권한을 manifest에 반영해야 함 |
-
-MVP에서는 Chrome 확장 프로그램에서 상태 피드백을 명확히 줄 수 있는 `chrome.downloads.download` 방식을 우선 검토한다. 단, 구현 중 권한 또는 CORS 제약이 확인되면 URL 열기 방식으로 축소할 수 있다.
 
 ## 검증 기준
 
@@ -143,6 +145,10 @@ MVP에서는 Chrome 확장 프로그램에서 상태 피드백을 명확히 줄 
 - 비디오 모드에서 API 비디오 다운로드 URL이 생성된다.
 - API base URL, `filename`, `bitrate`, `resolution` 설정값이 생성 URL에 반영된다.
 - 서버가 꺼져 있을 때 사용자에게 서버 미응답 상태를 보여준다.
+- `pnpm --filter chrome-extension run build`가 WXT generated manifest, popup asset, 권한, icon 참조를 검증한다.
+- `pnpm --filter chrome-extension run test`가 URL 감지, API URL 생성, storage key 호환성, popup 상태 전이를 검증한다.
+- `pnpm --filter chrome-extension run lint`가 WXT type generation과 TypeScript compile을 검증한다.
+- `pnpm --filter chrome-extension run test:browser`가 실제 로컬 API `/health`, WXT load unpacked 렌더링, built popup의 지원/미지원/다운로드 시작 흐름을 검증한다.
 
 ## 후속 보류 사항
 

@@ -2,10 +2,28 @@
   "name": "chrome-extension",
   "version": "1.0.0",
   "private": true,
-  "description": "Media Nest Chrome extension source snapshot.",
+  "description": "Media Nest WXT Chrome extension.",
   "scripts": {
-    "build": "node -e \"const fs=require('fs'); fs.accessSync('manifest.json'); fs.mkdirSync('dist',{recursive:true}); fs.writeFileSync('dist/.build-snapshot','verified\\n')\"",
-    "lint": "node -e \"process.exit(0)\"",
-    "test": "node -e \"process.exit(0)\""
+    "build": "wxt build && node tools/verify-extension-package.js",
+    "dev": "wxt",
+    "lint": "wxt prepare && tsc --noEmit",
+    "postinstall": "wxt prepare",
+    "test": "vitest run",
+    "test:browser": "wxt build && node tools/verify-extension-package.js && node tests/browser/popup-smoke.mjs",
+    "zip": "wxt zip"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.43",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "1.2.2",
+    "playwright": "1.61.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9",
+    "wxt": "0.20.26"
   }
 }

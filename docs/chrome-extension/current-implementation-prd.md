@@ -2,13 +2,13 @@
 
 ## Problem Statement
 
-Media Nest API 서버는 YouTube 영상 URL 또는 영상 ID를 기반으로 오디오와 비디오 파일 다운로드 응답을 제공한다. 하지만 Chrome 확장 프로그램은 현재 소스 snapshot만 `apps/chrome-extension`에 이관된 상태라, 사용자가 YouTube 페이지에서 현재 탭 URL을 감지해 API 다운로드를 시작할 수 없다.
+Media Nest API 서버는 YouTube 영상 URL 또는 영상 ID를 기반으로 오디오와 비디오 파일 다운로드 응답을 제공한다. Chrome 확장 프로그램 MVP는 `apps/chrome-extension`에서 현재 YouTube watch 탭의 video ID를 감지하고, 사용자가 popup에서 API 다운로드를 시작할 수 있게 한다.
 
 사용자는 YouTube 페이지에서 URL을 복사하고 API 경로와 query string을 직접 조합하지 않고도 오디오 또는 비디오 다운로드를 시작할 수 있어야 한다.
 
 ## Solution
 
-Chrome 확장 프로그램 popup은 현재 활성 탭의 YouTube 영상 URL 또는 영상 ID를 감지하고, 사용자가 오디오/비디오 다운로드 모드와 선택 옵션을 지정한 뒤 Media Nest API 호출로 파일 다운로드를 시작하게 한다.
+Chrome 확장 프로그램 popup은 WXT + React + TypeScript로 구현되어 있다. Popup은 현재 활성 탭의 YouTube 영상 URL을 감지하고, 사용자가 오디오/비디오 다운로드 모드와 선택 옵션을 지정한 뒤 Media Nest API 호출로 파일 다운로드를 시작하게 한다.
 
 API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/current-implementation-fsd.md`를 기준으로 소비하며, 이번 범위에서는 서버 엔드포인트나 응답 계약을 변경하지 않는다.
 
@@ -28,8 +28,10 @@ API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/curre
 
 - Chrome 확장 프로그램 문서는 `docs/chrome-extension`이 소유하고, API 서버 문서는 `docs/api`가 소유한다.
 - 확장 프로그램 MVP는 현재 활성 탭의 URL을 읽는 popup 중심 흐름으로 정의한다.
-- 현재 Media Nest API 계약을 그대로 사용한다. 오디오는 `/audio` 또는 `/audio/:id`, 비디오는 `/video` 또는 `/video/:id`를 호출한다.
-- API base URL은 기본값을 둘 수 있지만, 사용자 또는 개발자가 변경 가능한 설정값으로 다룬다.
+- WXT는 extension entrypoint와 generated manifest를 소유하고, React는 popup UI rendering만 담당한다.
+- Chrome API, Media Nest API, YouTube URL 감지, popup 상태 전이는 React component 밖의 TypeScript module로 분리한다.
+- 현재 Media Nest API 계약을 그대로 사용한다. 오디오는 `/audio/:id`, 비디오는 `/video/:id`를 우선 호출한다.
+- API base URL은 기본값 `http://127.0.0.1:3030`을 제공하되, 사용자가 변경 가능한 설정값으로 다룬다.
 - 현재 서버 CORS는 전체 허용 상태이므로 MVP 문서에서는 이를 전제로 한다. `EXTENSION_ID` 기반 allowlist 강제는 별도 후속 범위로 둔다.
 - popup은 YouTube 영상으로 판단할 수 없는 탭에서는 다운로드 실행 대신 상태 메시지를 보여준다.
 - Chrome Web Store 배포, 계정, 다운로드 이력, 작업 큐, 진행률 조회는 이번 문서 범위에 포함하지 않는다.
@@ -42,7 +44,9 @@ API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/curre
 - 오디오 모드가 선택되면 API 서버의 오디오 계약에 맞는 다운로드 URL을 생성하는지 검증한다.
 - 비디오 모드가 선택되면 API 서버의 비디오 계약에 맞는 다운로드 URL을 생성하는지 검증한다.
 - `filename`, `bitrate`, `resolution`, API base URL 설정값이 API 호출 URL에 반영되는지 검증한다.
-- Chrome extension load unpacked 환경에서 manifest, popup asset, script 경로가 깨지지 않는지 확인한다.
+- Chrome extension load unpacked 환경에서 WXT generated manifest, popup asset, script 경로가 깨지지 않는지 확인한다.
+- package test는 Chrome runtime 없이 URL 감지, API URL 생성, popup 상태 전이를 검증하고, package build는 WXT build output의 manifest/popup 정적 파일 참조를 검증한다.
+- browser smoke는 로컬 API `/health`와 built popup의 지원/미지원/다운로드 시작 흐름을 확인한다.
 
 ## Out of Scope
 
@@ -57,6 +61,4 @@ API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/curre
 
 ## Further Notes
 
-현재 `apps/chrome-extension` snapshot은 실제 동작 가능한 MVP가 아니라 보존된 소스에 가깝다. `manifest.json`은 존재하지 않는 content script 경로를 참조하고, `popup/popup.html`은 현재 폴더 구조와 맞지 않는 asset 상대 경로를 참조하며, `scripts/popup.js`는 실제 API 호출 UI를 제공하지 않는다.
-
-후속 구현은 이 문서의 제품 범위를 기준으로 `docs/chrome-extension/current-implementation-fsd.md`의 계약과 상태 흐름을 구체화해야 한다.
+현재 `apps/chrome-extension` MVP는 popup 중심 흐름으로 구현되어 있다. 일반 YouTube watch URL을 우선 지원하며, Shorts와 `youtu.be` URL, 진행률 표시, Chrome Web Store 배포 자동화는 후속 범위다.

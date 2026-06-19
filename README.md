@@ -175,15 +175,35 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 
 ## Chrome Extension
 
-Chrome 확장 프로그램의 현재 소스 snapshot은 `apps/chrome-extension`에 이관되어 workspace package로 추적한다.
+Chrome 확장 프로그램 소스는 `apps/chrome-extension` workspace package에서 관리한다.
 
 Chrome 확장 프로그램의 제품 범위와 기능 계약은 `docs/chrome-extension/current-implementation-prd.md`, `docs/chrome-extension/current-implementation-fsd.md`를 기준으로 한다.
 
-현재 이관은 소스 보존이 목적이며, 아래 항목은 후속 작업으로 남긴다.
+현재 MVP는 WXT + React + TypeScript popup에서 활성 YouTube watch 탭의 11자 video ID를 감지하고, API base URL과 다운로드 옵션을 조합해 `/audio/:id` 또는 `/video/:id` 다운로드를 시작한다.
 
-- `manifest.json` content script가 존재하지 않는 `index.js`를 참조한다.
-- `popup/popup.html`의 CSS/JS 상대 경로가 현재 파일 배치와 맞지 않는다.
-- popup에서 현재 YouTube tab URL 또는 video ID를 추출해 API를 호출하는 UI는 아직 없다.
+로컬 개발 서버:
+
+```bash
+pnpm --filter chrome-extension run dev
+```
+
+WXT dev mode는 extension을 설치한 Chromium을 열어 popup UI를 빠르게 확인하는 용도다. 실제 load unpacked 검증은 production build output인 `apps/chrome-extension/.output/chrome-mv3`를 사용한다.
+
+확장 프로그램 build output, URL 생성 로직, TypeScript 구조 확인:
+
+```bash
+pnpm --filter chrome-extension run build
+pnpm --filter chrome-extension run test
+pnpm --filter chrome-extension run lint
+```
+
+브라우저 smoke:
+
+```bash
+pnpm --filter chrome-extension run test:browser
+```
+
+`test:browser`는 먼저 로컬 API `http://127.0.0.1:3030/health`를 확인하고, WXT production build를 Chromium load unpacked로 렌더링한 뒤, built popup을 브라우저에서 실행해 지원 페이지, 미지원 페이지, 서버 확인, 다운로드 시작 흐름을 검증한다. Chrome Web Store 배포, `EXTENSION_ID` 기반 CORS allowlist 강제, Shorts/`youtu.be` 지원, 다운로드 진행률 표시는 후속 범위다.
 
 ## Test
 
