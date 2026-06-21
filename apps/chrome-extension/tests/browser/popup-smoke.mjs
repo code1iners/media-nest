@@ -14,8 +14,13 @@ const defaultExtensionOutputRoot = isDevSmoke ? '.output/chrome-mv3-dev' : '.out
 const extensionOutputRoot = path.resolve(
   process.env.MEDIA_NEST_EXTENSION_OUTPUT_ROOT ?? defaultExtensionOutputRoot,
 );
-/** 실제 로컬 Media Nest API base URL. */
-const realApiBaseUrl = process.env.MEDIA_NEST_API_BASE_URL ?? 'http://127.0.0.1:3030';
+/** 실제 Media Nest API base URL. */
+const realApiBaseUrl =
+  process.env.WXT_MEDIA_NEST_API_BASE_URL ??
+  process.env.MEDIA_NEST_API_BASE_URL ??
+  'https://media-nest.codeliners.cc';
+/** Built popup에 주입되는 Media Nest API origin. */
+const expectedApiOrigin = new URL(realApiBaseUrl).origin;
 
 if (!['production', 'dev'].includes(smokeMode)) {
   throw new Error(`Unsupported popup smoke mode: ${smokeMode}`);
@@ -46,21 +51,19 @@ if (isDevSmoke) {
   process.exit(0);
 }
 
-/** Browser smoke용 fake API server. */
-const apiServer = await createApiServer();
-/** Browser smoke용 unavailable fake API server. */
-const unavailableApiServer = await createUnavailableApiServer();
 /** Browser smoke용 static output server. */
 const staticServer = await createStaticServer(extensionOutputRoot);
 
 try {
   await verifyLoadUnpackedPopup(extensionOutputRoot);
   console.error('[popup-smoke] load unpacked popup ok');
-  await verifyUnsupportedPage(staticServer.origin);
-  console.error('[popup-smoke] unsupported page ok');
-  await verifyServerUnavailableFlow(staticServer.origin, unavailableApiServer.origin);
+  await verifyMissingSourceUrlFlow(staticServer.origin);
+  console.error('[popup-smoke] missing source URL flow ok');
+  /** 서버 실패 flow에서 수집한 fake API 요청. */
+  const unavailableFakeApiRequests = await verifyServerUnavailableFlow(staticServer.origin);
   console.error('[popup-smoke] server unavailable flow ok');
-  await verifyDownloadFlow(staticServer.origin, apiServer.origin);
+  /** 다운로드 flow에서 수집한 fake API 요청. */
+  const fakeApiRequests = await verifyDownloadFlow(staticServer.origin);
   console.error('[popup-smoke] download flow ok');
 
   console.log(
@@ -69,8 +72,8 @@ try {
         realApiHealth: `${realApiBaseUrl}/health`,
         mode: smokeMode,
         outputRoot: extensionOutputRoot,
-        fakeApiRequests: apiServer.requests,
-        unavailableFakeApiRequests: unavailableApiServer.requests,
+        fakeApiRequests,
+        unavailableFakeApiRequests,
         status: 'ok',
       },
       null,
@@ -78,10 +81,10 @@ try {
     ),
   );
 } finally {
-  await Promise.all([apiServer.close(), unavailableApiServer.close(), staticServer.close()]);
+  await staticServer.close();
 }
 
-/** 실제 로컬 API health endpoint를 확인한다. */
+/** 실제 Media Nest API health endpoint를 확인한다. */
 async function assertRealApiHealth(apiBaseUrl) {
   /** health check abort controller. */
   const abortController = new AbortController();
@@ -95,14 +98,14 @@ async function assertRealApiHealth(apiBaseUrl) {
     });
 
     if (!response.ok) {
-      throw new Error(`Local API health responded with ${response.status}`);
+      throw new Error(`Media Nest API health responded with ${response.status}`);
     }
 
     /** 실제 API health payload. */
     const payload = await response.json();
 
     if (payload?.ok !== true) {
-      throw new Error('Local API health payload did not contain ok=true');
+      throw new Error('Media Nest API health payload did not contain ok=true');
     }
   } finally {
     clearTimeout(timeout);
@@ -156,8 +159,8 @@ function launchExtensionContext(userDataDir, outputRoot) {
   });
 }
 
-/** Built popup에서 unsupported page 상태를 확인한다. */
-async function verifyUnsupportedPage(origin) {
+/** Built popup에서 source URL 미입력 상태를 확인한다. */
+async function verifyMissingSourceUrlFlow(origin) {
   /** Browser instance. */
   const browser = await chromium.launch();
   /** Browser page. */
@@ -165,12 +168,11 @@ async function verifyUnsupportedPage(origin) {
 
   try {
     await installFakeChromeApi(page, {
-      activeTabUrl: 'https://example.com',
       storedOptions: {},
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, 'YouTube watch 페이지에서 다시 열어주세요.');
+    await expectStatusText(page, '추출할 URL을 입력하세요.');
     await expectDownloadButtonDisabled(page, true);
   } finally {
     await browser.close();
@@ -178,23 +180,28 @@ async function verifyUnsupportedPage(origin) {
 }
 
 /** Built popup에서 API health 실패 상태를 확인한다. */
-async function verifyServerUnavailableFlow(origin, apiOrigin) {
+async function verifyServerUnavailableFlow(origin) {
   /** Browser instance. */
   const browser = await chromium.launch();
   /** Browser page. */
   const page = await browser.newPage();
+  /** Fake API 요청 목록. */
+  const requests = [];
 
   try {
+    await routeMediaNestApi(page, {
+      requests,
+      healthOk: false,
+    });
     await installFakeChromeApi(page, {
-      activeTabUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
       storedOptions: {
-        apiBaseUrl: apiOrigin,
         mode: 'audio',
       },
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, '현재 영상 감지 완료: abc123_DEF0');
+    await page.getByLabel('추출 URL').fill('https://www.youtube.com/watch?v=abc123_DEF0');
+    await expectStatusText(page, '추출할 URL이 준비되었습니다.');
     await page.getByRole('button', { name: '추출 시작' }).click();
     await expectStatusText(page, 'Server is unavailable.');
 
@@ -204,31 +211,38 @@ async function verifyServerUnavailableFlow(origin, apiOrigin) {
     if (downloadUrl !== null) {
       throw new Error(`Expected no download URL, got ${downloadUrl}`);
     }
+
+    return requests;
   } finally {
     await browser.close();
   }
 }
 
 /** Built popup에서 supported page 다운로드 시작 흐름을 확인한다. */
-async function verifyDownloadFlow(origin, apiOrigin) {
+async function verifyDownloadFlow(origin) {
   /** Browser instance. */
   const browser = await chromium.launch();
   /** Browser page. */
   const page = await browser.newPage({ viewport: { width: 360, height: 600 } });
+  /** Fake API 요청 목록. */
+  const requests = [];
 
   try {
+    await routeMediaNestApi(page, {
+      requests,
+      healthOk: true,
+    });
     await installFakeChromeApi(page, {
-      activeTabUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
       storedOptions: {
-        apiBaseUrl: apiOrigin,
-        filename: 'browser smoke',
         mode: 'audio',
-        bitrate: '192',
       },
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, '현재 영상 감지 완료: abc123_DEF0');
+    await page.getByLabel('추출 URL').fill('https://www.youtube.com/watch?v=abc123_DEF0');
+    await page.getByLabel('파일명').fill('browser smoke');
+    await page.getByLabel('최대 비트레이트').fill('192');
+    await expectStatusText(page, '추출할 URL이 준비되었습니다.');
     await expectDownloadButtonDisabled(page, false);
     await expectDownloadButtonVisibleInViewport(page);
     await page.getByRole('button', { name: '추출 시작' }).click();
@@ -237,12 +251,60 @@ async function verifyDownloadFlow(origin, apiOrigin) {
     /** Fake Chrome downloads API가 요청한 URL. */
     const downloadUrl = await page.evaluate(() => globalThis.__mediaNestDownloadUrl);
 
-    if (downloadUrl !== `${apiOrigin}/audio/abc123_DEF0?filename=browser+smoke&bitrate=192`) {
+    if (
+      downloadUrl !==
+      `${expectedApiOrigin}/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0&filename=browser+smoke&bitrate=192`
+    ) {
       throw new Error(`Unexpected download URL: ${downloadUrl}`);
     }
+
+    return requests;
   } finally {
     await browser.close();
   }
+}
+
+/** Production API 요청을 browser smoke 안에서 fake 응답으로 처리한다. */
+async function routeMediaNestApi(page, { requests, healthOk }) {
+  await page.route(`${expectedApiOrigin}/**`, async (route) => {
+    /** 가로챈 production API 요청 URL. */
+    const requestUrl = new URL(route.request().url());
+
+    requests.push(`${requestUrl.pathname}${requestUrl.search}`);
+
+    if (requestUrl.pathname === '/health') {
+      await route.fulfill({
+        status: healthOk ? 200 : 503,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ok: healthOk }),
+      });
+      return;
+    }
+
+    if (requestUrl.pathname === '/audio' && requestUrl.searchParams.has('url')) {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Disposition': 'attachment; filename="browser-smoke.mp3"',
+          'Content-Type': 'audio/mpeg',
+        },
+        body: 'browser smoke audio',
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 404,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: 'not found',
+    });
+  });
 }
 
 /** Page에 extension popup용 fake Chrome API를 주입한다. */
@@ -253,11 +315,6 @@ async function installFakeChromeApi(page, options) {
     globalThis.chrome = {
       runtime: {
         lastError: null,
-      },
-      tabs: {
-        query(_queryInfo, callback) {
-          callback([{ url: chromeOptions.activeTabUrl }]);
-        },
       },
       storage: {
         local: {
@@ -363,58 +420,6 @@ async function expectDownloadButtonVisibleInViewport(page) {
       `Expected download button within 360x600 popup viewport, got top=${metrics.top}, bottom=${metrics.bottom}, innerHeight=${metrics.innerHeight}`,
     );
   }
-}
-
-/** Health check가 실패하는 fake Media Nest API server를 만든다. */
-function createUnavailableApiServer() {
-  /** 수신한 API 요청 경로. */
-  const requests = [];
-  /** Fake API server. */
-  const server = http.createServer((request, response) => {
-    requests.push(request.url);
-    response.setHeader('Access-Control-Allow-Origin', '*');
-
-    if (request.url === '/health') {
-      response.statusCode = 503;
-      response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify({ ok: false }));
-      return;
-    }
-
-    response.statusCode = 404;
-    response.end('not found');
-  });
-
-  return listen(server, { requests });
-}
-
-/** Fake Media Nest API server를 만든다. */
-function createApiServer() {
-  /** 수신한 API 요청 경로. */
-  const requests = [];
-  /** Fake API server. */
-  const server = http.createServer((request, response) => {
-    requests.push(request.url);
-    response.setHeader('Access-Control-Allow-Origin', '*');
-
-    if (request.url === '/health') {
-      response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify({ ok: true }));
-      return;
-    }
-
-    if (request.url?.startsWith('/audio/')) {
-      response.setHeader('Content-Type', 'audio/mpeg');
-      response.setHeader('Content-Disposition', 'attachment; filename="browser-smoke.mp3"');
-      response.end('browser smoke audio');
-      return;
-    }
-
-    response.statusCode = 404;
-    response.end('not found');
-  });
-
-  return listen(server, { requests });
 }
 
 /** WXT output static server를 만든다. */

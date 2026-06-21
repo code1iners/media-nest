@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import config from '../../wxt.config';
+import config, { createApiHostPermission } from '../../wxt.config';
 
 /** 테스트에서 확인할 WXT config shape. */
 type TestableWxtConfig = {
@@ -21,8 +21,19 @@ describe('WXT config', () => {
 
     expect(testableConfig.modules).toContain('@wxt-dev/module-react');
     expect(testableConfig.manifest?.permissions).toEqual(
-      expect.arrayContaining(['storage', 'activeTab', 'downloads']),
+      expect.arrayContaining(['storage', 'downloads']),
     );
-    expect(testableConfig.manifest?.host_permissions).toContain('<all_urls>');
+    expect(testableConfig.manifest?.permissions).not.toContain('activeTab');
+    expect(testableConfig.manifest?.host_permissions).toEqual([
+      'https://media-nest.codeliners.cc/*',
+    ]);
+    expect(testableConfig.manifest?.host_permissions).not.toContain('<all_urls>');
+  });
+
+  it('builds host permissions from the configured API origin only', () => {
+    expect(createApiHostPermission('http://127.0.0.1:3030')).toBe('http://127.0.0.1:3030/*');
+    expect(createApiHostPermission('https://media-nest.codeliners.cc')).toBe(
+      'https://media-nest.codeliners.cc/*',
+    );
   });
 });

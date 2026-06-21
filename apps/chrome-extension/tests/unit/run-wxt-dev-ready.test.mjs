@@ -8,6 +8,7 @@ const {
   createDevReadySuccessMessage,
   createDevPreviewUrl,
   createWxtDevArgs,
+  createWxtDevEnv,
   probeDevReadiness,
 } = readinessModule;
 
@@ -143,11 +144,22 @@ describe('WXT dev readiness', () => {
     expect(createWxtDevArgs(['--port', '3009'], '3001')).toEqual(['--port', '3009']);
     expect(
       createDevPreviewUrl({
-        apiBaseUrl: 'http://127.0.0.1:3030',
         origin: 'http://localhost:3000',
       }),
-    ).toBe(
-      'http://localhost:3000/popup.html?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A3030&tabUrl=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0',
-    );
+    ).toBe('http://localhost:3000/popup.html');
+  });
+
+  it('passes the selected API base URL into the WXT runtime environment', () => {
+    expect(
+      createWxtDevEnv(
+        {
+          MEDIA_NEST_API_BASE_URL: 'http://127.0.0.1:3030',
+        },
+        'http://127.0.0.1:3030',
+      ),
+    ).toMatchObject({
+      MEDIA_NEST_API_BASE_URL: 'http://127.0.0.1:3030',
+      WXT_MEDIA_NEST_API_BASE_URL: 'http://127.0.0.1:3030',
+    });
   });
 });

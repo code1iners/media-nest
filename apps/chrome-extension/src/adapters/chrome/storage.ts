@@ -30,7 +30,15 @@ export function createStorageAdapter(chromeApi: typeof chrome = chrome): Storage
     },
     saveOptions(options) {
       return new Promise((resolve, reject) => {
-        chromeApi.storage.local.set(options, () => {
+        /** Chrome storage에 남길 non-sensitive option. */
+        const storedOptions = {
+          bitrate: options.bitrate,
+          filename: options.filename,
+          mode: options.mode,
+          resolution: options.resolution,
+        };
+
+        chromeApi.storage.local.set(storedOptions, () => {
           if (chromeApi.runtime.lastError) {
             reject(new Error('Could not save extension settings.'));
             return;

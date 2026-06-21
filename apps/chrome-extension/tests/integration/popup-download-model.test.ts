@@ -12,15 +12,9 @@ function createDependencies(
   /** 저장된 다운로드 옵션. */
   const savedOptions = {
     ...DEFAULT_DOWNLOAD_OPTIONS,
-    apiBaseUrl: 'http://127.0.0.1:3030',
   };
 
   return {
-    tabs: {
-      getActiveTabUrl: vi
-        .fn()
-        .mockResolvedValue('https://www.youtube.com/watch?v=abc123_DEF0'),
-    },
     storage: {
       loadOptions: vi.fn().mockResolvedValue(savedOptions),
       saveOptions: vi.fn().mockResolvedValue(undefined),
@@ -36,7 +30,7 @@ function createDependencies(
 }
 
 describe('popup download model', () => {
-  it('enters ready state for supported YouTube tabs and valid API URL', async () => {
+  it('starts with source URL input required instead of active tab detection', async () => {
     /** Popup model dependency. */
     const dependencies = createDependencies();
     /** Popup download model. */
@@ -45,79 +39,90 @@ describe('popup download model', () => {
     await model.initialize();
 
     expect(model.getSnapshot()).toMatchObject({
+      canDownload: false,
+      status: {
+        kind: 'missing-source-url',
+        message: '추출할 URL을 입력하세요.',
+      },
+    });
+  });
+
+  it('enables download when a valid source URL is entered on any page', async () => {
+    /** Popup model dependency. */
+    const dependencies = createDependencies();
+    /** Popup download model. */
+    const model = createPopupDownloadModel(dependencies);
+
+    await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
+
+    expect(model.getSnapshot()).toMatchObject({
       canDownload: true,
       status: {
         kind: 'ready',
-        message: '현재 영상 감지 완료: abc123_DEF0',
+        message: '추출할 URL이 준비되었습니다.',
       },
     });
   });
 
-  it('disables download on unsupported tabs', async () => {
-    /** Popup model dependency. */
-    const dependencies = createDependencies({
-      tabs: {
-        getActiveTabUrl: vi.fn().mockResolvedValue('https://example.com'),
-      },
-    });
-    /** Popup download model. */
-    const model = createPopupDownloadModel(dependencies);
-
-    await model.initialize();
-
-    expect(model.getSnapshot()).toMatchObject({
-      canDownload: false,
-      status: {
-        kind: 'unsupported-page',
-        message: 'YouTube watch 페이지에서 다시 열어주세요.',
-      },
-    });
-  });
-
-  it('disables download when API base URL is invalid', async () => {
+  it('does not persist source URLs while keeping the entered URL ready', async () => {
     /** Popup model dependency. */
     const dependencies = createDependencies({
       storage: {
-        loadOptions: vi.fn().mockResolvedValue({
-          ...DEFAULT_DOWNLOAD_OPTIONS,
-          apiBaseUrl: 'ftp://127.0.0.1',
-        }),
-        saveOptions: vi.fn().mockResolvedValue(undefined),
+        loadOptions: vi.fn().mockResolvedValue(DEFAULT_DOWNLOAD_OPTIONS),
+        saveOptions: vi.fn().mockRejectedValue(new Error('storage unavailable')),
       },
     });
     /** Popup download model. */
     const model = createPopupDownloadModel(dependencies);
 
     await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
 
+    expect(dependencies.storage.saveOptions).not.toHaveBeenCalled();
     expect(model.getSnapshot()).toMatchObject({
-      canDownload: false,
+      canDownload: true,
       status: {
-        kind: 'missing-api-url',
-        message: '올바른 API 서버 주소를 입력하세요.',
+        kind: 'ready',
+        message: '추출할 URL이 준비되었습니다.',
       },
     });
   });
 
-  it('shows active tab read failure instead of staying in checking state', async () => {
+  it('disables download when source URL is invalid', async () => {
     /** Popup model dependency. */
-    const dependencies = createDependencies({
-      tabs: {
-        getActiveTabUrl: vi.fn().mockRejectedValue(new Error('Could not read the active tab.')),
-      },
-    });
+    const dependencies = createDependencies();
     /** Popup download model. */
     const model = createPopupDownloadModel(dependencies);
 
     await model.initialize();
+    await model.updateOption('sourceUrl', 'not-a-url');
 
     expect(model.getSnapshot()).toMatchObject({
       canDownload: false,
       status: {
-        kind: 'download-failed',
-        message: 'Could not read the active tab.',
+        kind: 'invalid-source-url',
+        message: '올바른 YouTube watch URL을 입력하세요.',
       },
     });
+  });
+
+  it('uses the production API base URL when no WXT environment override exists', async () => {
+    /** Popup model dependency. */
+    const dependencies = createDependencies();
+    /** Popup download model. */
+    const model = createPopupDownloadModel(dependencies);
+
+    await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
+    await model.submitDownload();
+
+    expect(dependencies.mediaNestClient.assertServerAvailable).toHaveBeenCalledWith(
+      'https://media-nest.codeliners.cc',
+    );
+    expect(dependencies.downloads.startDownload).toHaveBeenCalledWith(
+      'https://media-nest.codeliners.cc/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0',
+    );
   });
 
   it('checks server and starts a download once for duplicate submits', async () => {
@@ -138,6 +143,7 @@ describe('popup download model', () => {
     const model = createPopupDownloadModel(dependencies);
 
     await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
 
     /** 첫 번째 다운로드 submit. */
     const firstSubmit = model.submitDownload();
@@ -150,7 +156,7 @@ describe('popup download model', () => {
     expect(dependencies.mediaNestClient.assertServerAvailable).toHaveBeenCalledTimes(1);
     expect(dependencies.downloads.startDownload).toHaveBeenCalledTimes(1);
     expect(dependencies.downloads.startDownload).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/audio/abc123_DEF0',
+      'https://media-nest.codeliners.cc/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0',
     );
     expect(model.getSnapshot().status).toMatchObject({
       kind: 'download-started',
@@ -176,17 +182,19 @@ describe('popup download model', () => {
     const model = createPopupDownloadModel(dependencies);
 
     await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
 
     /** 제출 시점의 다운로드 요청. */
     const submit = model.submitDownload();
 
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=changed_ID1');
     await model.updateOption('mode', 'video');
     await model.updateOption('resolution', '720');
     releaseServerCheck();
     await submit;
 
     expect(dependencies.downloads.startDownload).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/audio/abc123_DEF0',
+      'https://media-nest.codeliners.cc/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0',
     );
   });
 
@@ -201,6 +209,7 @@ describe('popup download model', () => {
     const model = createPopupDownloadModel(dependencies);
 
     await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
     await model.submitDownload();
 
     expect(model.getSnapshot()).toMatchObject({
@@ -219,6 +228,7 @@ describe('popup download model', () => {
     const model = createPopupDownloadModel(dependencies);
 
     await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
     await model.updateOption('mode', 'video');
     await model.updateOption('resolution', '720');
     await model.submitDownload();
@@ -230,7 +240,7 @@ describe('popup download model', () => {
       }),
     );
     expect(dependencies.downloads.startDownload).toHaveBeenCalledWith(
-      'http://127.0.0.1:3030/video/abc123_DEF0?resolution=720',
+      'https://media-nest.codeliners.cc/video?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0&resolution=720',
     );
   });
 });

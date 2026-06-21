@@ -11,6 +11,8 @@ const manifestPath = path.join(outputRoot, 'manifest.json');
 const missingReferences = [];
 /** 검증 실패 목록. */
 const validationErrors = [];
+/** 기본 운영 Media Nest API 서버 주소. */
+const DEFAULT_API_BASE_URL = 'https://media-nest.codeliners.cc';
 
 /** 존재해야 하는 파일 참조를 확인한다. */
 function assertOutputFileExists(referencePath, ownerPath) {
@@ -29,6 +31,24 @@ function assertIncludes(values, expectedValue, ownerPath) {
   }
 }
 
+/** 환경 변수 기반 API host permission을 만든다. */
+function createExpectedApiHostPermission() {
+  /** 검증 대상 API 서버 주소. */
+  const apiBaseUrl =
+    process.env.WXT_MEDIA_NEST_API_BASE_URL ??
+    process.env.MEDIA_NEST_API_BASE_URL ??
+    DEFAULT_API_BASE_URL;
+
+  try {
+    /** API 서버 origin. */
+    const origin = new URL(apiBaseUrl).origin;
+
+    return `${origin}/*`;
+  } catch {
+    return `${DEFAULT_API_BASE_URL}/*`;
+  }
+}
+
 /** generated manifest에 선언된 정적 파일 참조를 확인한다. */
 function verifyManifestReferences(manifest) {
   if (manifest.action?.default_popup) {
@@ -42,9 +62,20 @@ function verifyManifestReferences(manifest) {
   });
 
   assertIncludes(manifest.permissions, 'storage', 'manifest.json permissions');
-  assertIncludes(manifest.permissions, 'activeTab', 'manifest.json permissions');
   assertIncludes(manifest.permissions, 'downloads', 'manifest.json permissions');
-  assertIncludes(manifest.host_permissions, '<all_urls>', 'manifest.json host_permissions');
+  assertIncludes(
+    manifest.host_permissions,
+    createExpectedApiHostPermission(),
+    'manifest.json host_permissions',
+  );
+
+  if (manifest.permissions?.includes('activeTab')) {
+    validationErrors.push('manifest.json permissions should not include activeTab');
+  }
+
+  if (manifest.host_permissions?.includes('<all_urls>')) {
+    validationErrors.push('manifest.json host_permissions should not include <all_urls>');
+  }
 }
 
 /** generated popup HTML에 선언된 CSS와 script 참조를 확인한다. */

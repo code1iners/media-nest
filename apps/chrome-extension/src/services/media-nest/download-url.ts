@@ -2,28 +2,24 @@ import {
   type DownloadOptions,
   assertDownloadMode,
   normalizeApiBaseUrl,
+  normalizeSourceUrl,
 } from '../../domain/download-options/download-options';
-import { isYoutubeVideoId } from '../../domain/youtube/youtube-url';
 
 /** 다운로드 URL 생성 option. */
-export type BuildDownloadUrlOptions = DownloadOptions & {
-  /** 요청 대상 YouTube video ID. */
-  videoId: string;
-};
+export type BuildDownloadUrlOptions = DownloadOptions;
 
 /** 선택된 모드와 옵션을 Media Nest 다운로드 URL로 변환한다. */
 export function buildDownloadUrl(options: BuildDownloadUrlOptions): string {
   assertDownloadMode(options.mode);
 
-  if (!isYoutubeVideoId(options.videoId)) {
-    throw new Error('A valid YouTube video ID is required');
-  }
-
   /** 정규화된 API base URL. */
   const apiBaseUrl = normalizeApiBaseUrl(options.apiBaseUrl);
+  /** 정규화된 원본 URL. */
+  const sourceUrl = normalizeSourceUrl(options.sourceUrl);
   /** 다운로드 URL의 선택 query 값. */
   const searchParams = new URLSearchParams();
 
+  searchParams.set('url', sourceUrl);
   appendOptionalQuery(searchParams, 'filename', options.filename);
 
   if (options.mode === 'audio') {
@@ -34,12 +30,8 @@ export function buildDownloadUrl(options: BuildDownloadUrlOptions): string {
     appendOptionalQuery(searchParams, 'resolution', options.resolution);
   }
 
-  /** optional query string. */
-  const queryString = searchParams.toString();
-  /** Media Nest path endpoint 기반 다운로드 URL. */
-  const downloadUrl = `${apiBaseUrl}/${options.mode}/${encodeURIComponent(options.videoId)}`;
-
-  return queryString ? `${downloadUrl}?${queryString}` : downloadUrl;
+  /** Media Nest URL endpoint 기반 다운로드 URL. */
+  return `${apiBaseUrl}/${options.mode}?${searchParams.toString()}`;
 }
 
 /** API base URL에서 health check URL을 만든다. */

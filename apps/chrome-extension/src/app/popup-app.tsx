@@ -47,8 +47,8 @@ export function PopupApp() {
   const statusLabel = getStatusLabel(snapshot.status.kind);
   /** 제출 버튼 문구. */
   const submitLabel = getSubmitLabel(snapshot);
-  /** API 서버 주소 강조 여부. */
-  const shouldEmphasizeApiBaseUrl = isApiStatusWarning(snapshot.status.kind);
+  /** 원본 URL 입력 강조 여부. */
+  const shouldEmphasizeSourceUrl = isSourceUrlStatusWarning(snapshot.status.kind);
   /** 형식별 옵션 필드 copy. */
   const adaptiveOption = getAdaptiveOptionCopy(snapshot);
 
@@ -88,7 +88,7 @@ export function PopupApp() {
     void getPopupModel().updateOption('mode', mode);
   }
 
-  function handleTextOptionChange<Key extends 'apiBaseUrl' | 'filename' | 'bitrate' | 'resolution'>(
+  function handleTextOptionChange<Key extends 'sourceUrl' | 'filename' | 'bitrate' | 'resolution'>(
     key: Key,
   ) {
     return function updateTextOption(event: ChangeEvent<HTMLInputElement>) {
@@ -128,6 +128,19 @@ export function PopupApp() {
       </section>
 
       <form className="download-form" onSubmit={handleSubmit}>
+        <label className={shouldEmphasizeSourceUrl ? 'field source-field has-warning' : 'field source-field'}>
+          <span className="field-label">추출 URL</span>
+          <span className="field-description">YouTube watch URL을 붙여넣으세요.</span>
+          <input
+            autoComplete="off"
+            name="sourceUrl"
+            placeholder="https://www.youtube.com/watch?v=..."
+            type="url"
+            value={snapshot.options.sourceUrl}
+            onChange={handleTextOptionChange('sourceUrl')}
+          />
+        </label>
+
         <fieldset className="mode-group">
           <legend>추출 형식</legend>
           <label className={selectedMode === 'audio' ? 'mode-option is-selected' : 'mode-option'}>
@@ -179,18 +192,6 @@ export function PopupApp() {
           />
         </label>
 
-        <label className={shouldEmphasizeApiBaseUrl ? 'field api-field has-warning' : 'field api-field'}>
-          <span className="field-label">API 서버 주소</span>
-          <span className="field-description">로컬 또는 배포된 Media Nest API 주소입니다.</span>
-          <input
-            autoComplete="off"
-            name="apiBaseUrl"
-            type="url"
-            value={snapshot.options.apiBaseUrl}
-            onChange={handleTextOptionChange('apiBaseUrl')}
-          />
-        </label>
-
         <button className="primary-button" disabled={!snapshot.canDownload} type="submit">
           {submitLabel}
         </button>
@@ -205,11 +206,11 @@ function getStatusTone(statusKind: PopupStatusKind): StatusTone {
     return 'success';
   }
 
-  if (statusKind === 'checking-tab' || statusKind === 'checking-server') {
+  if (statusKind === 'checking-server') {
     return 'info';
   }
 
-  if (statusKind === 'missing-api-url' || statusKind === 'unsupported-page') {
+  if (statusKind === 'missing-source-url' || statusKind === 'invalid-source-url') {
     return 'warning';
   }
 
@@ -220,10 +221,9 @@ function getStatusTone(statusKind: PopupStatusKind): StatusTone {
 function getStatusLabel(statusKind: PopupStatusKind) {
   /** 상태 label map. */
   const labels: Record<PopupStatusKind, string> = {
-    'checking-tab': 'SCAN',
+    'missing-source-url': 'INPUT',
+    'invalid-source-url': 'CHECK',
     ready: 'READY',
-    'unsupported-page': 'WAIT',
-    'missing-api-url': 'SETUP',
     'checking-server': 'LINK',
     'download-started': 'LOOT',
     'download-failed': 'ERROR',
@@ -249,9 +249,9 @@ function getSubmitLabel(snapshot: PopupDownloadSnapshot) {
   return '추출 시작';
 }
 
-/** API 서버 주소를 사용자가 바로 고쳐야 하는 상태인지 확인한다. */
-function isApiStatusWarning(statusKind: PopupStatusKind) {
-  return statusKind === 'missing-api-url' || statusKind === 'download-failed';
+/** 원본 URL을 사용자가 바로 고쳐야 하는 상태인지 확인한다. */
+function isSourceUrlStatusWarning(statusKind: PopupStatusKind) {
+  return statusKind === 'missing-source-url' || statusKind === 'invalid-source-url';
 }
 
 /** 현재 추출 형식에 맞는 단일 옵션 필드 copy를 만든다. */

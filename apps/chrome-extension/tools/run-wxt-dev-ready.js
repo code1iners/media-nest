@@ -26,7 +26,10 @@ if (require.main === module) {
 /** WXT dev process를 실행하고 readiness probe를 비동기로 수행한다. */
 function runWxtDev() {
   /** local API base URL. */
-  const apiBaseUrl = process.env.MEDIA_NEST_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+  const apiBaseUrl =
+    process.env.WXT_MEDIA_NEST_API_BASE_URL ??
+    process.env.MEDIA_NEST_API_BASE_URL ??
+    DEFAULT_API_BASE_URL;
   /** WXT dev output root. */
   const outputRoot = path.resolve(
     process.env.MEDIA_NEST_WXT_DEV_OUTPUT_ROOT ?? DEFAULT_DEV_OUTPUT_ROOT,
@@ -48,7 +51,7 @@ function runWxtDev() {
   /** WXT child process. */
   const wxtProcess = spawn(resolveWxtCommand(), wxtArgs, {
     stdio: 'inherit',
-    env: process.env,
+    env: createWxtDevEnv(process.env, apiBaseUrl),
   });
 
   waitForDevReadiness({
@@ -64,7 +67,6 @@ function runWxtDev() {
           (previewServer) => {
             /** 자동으로 열 dev preview URL. */
             const previewUrl = createDevPreviewUrl({
-              apiBaseUrl,
               origin: previewServer.origin,
             });
 
@@ -106,6 +108,14 @@ function runWxtDev() {
 
     process.exit(code ?? 0);
   });
+}
+
+/** WXT dev process에 popup runtime용 API 환경 변수를 전달한다. */
+function createWxtDevEnv(env, apiBaseUrl) {
+  return {
+    ...env,
+    WXT_MEDIA_NEST_API_BASE_URL: apiBaseUrl,
+  };
 }
 
 /** WXT dev readiness가 충족될 때까지 기다린다. */
@@ -274,7 +284,7 @@ function createDevReadySuccessMessage({ apiBaseUrl, outputRoot, previewUrl }) {
     `[media-nest-dev] WXT dev output: ${outputRoot}`,
     `[media-nest-dev] Opening popup preview: ${previewUrl}`,
     '[media-nest-dev] You can also test the real extension popup from the Chromium window opened by WXT.',
-    '[media-nest-dev] Supported page for this MVP: https://www.youtube.com/watch?v=<11-char-id>',
+    '[media-nest-dev] Supported input for this MVP: https://www.youtube.com/watch?v=<11-char-id>',
   ].join('\n');
 }
 
@@ -322,15 +332,10 @@ function createWxtDevArgs(args, devServerPort = DEFAULT_WXT_DEV_PORT) {
 
 /** Dev preview URL을 만든다. */
 function createDevPreviewUrl({
-  apiBaseUrl,
   origin = `http://localhost:${DEFAULT_PREVIEW_PORT}`,
-  tabUrl = 'https://www.youtube.com/watch?v=abc123_DEF0',
 }) {
   /** Dev preview URL. */
   const previewUrl = new URL('/popup.html', origin);
-
-  previewUrl.searchParams.set('apiBaseUrl', apiBaseUrl);
-  previewUrl.searchParams.set('tabUrl', tabUrl);
 
   return previewUrl.toString();
 }
@@ -371,6 +376,7 @@ module.exports = {
   createDevReadySuccessMessage,
   createDevPreviewUrl,
   createWxtDevArgs,
+  createWxtDevEnv,
   probeDevReadiness,
   runWxtDev,
   waitForDevReadiness,

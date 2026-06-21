@@ -1,29 +1,25 @@
 import { type DownloadsAdapter, createDownloadsAdapter } from '../../adapters/chrome/downloads';
 import { type StorageAdapter, createStorageAdapter } from '../../adapters/chrome/storage';
-import { type TabsAdapter, createTabsAdapter } from '../../adapters/chrome/tabs';
 import {
   type DownloadOptions,
   DEFAULT_DOWNLOAD_OPTIONS,
   normalizeApiBaseUrl,
+  normalizeSourceUrl,
 } from '../../domain/download-options/download-options';
 import {
   CHECKING_SERVER_STATUS,
-  CHECKING_TAB_STATUS,
   DOWNLOAD_STARTED_STATUS,
-  MISSING_API_URL_STATUS,
+  INVALID_SOURCE_URL_STATUS,
+  MISSING_SOURCE_URL_STATUS,
   type PopupStatus,
-  UNSUPPORTED_PAGE_STATUS,
   createDownloadFailedStatus,
   createReadyStatus,
 } from '../../domain/popup-state/popup-state';
-import { type YoutubeTabInfo, detectYoutubeVideoId } from '../../domain/youtube/youtube-url';
 import { buildDownloadUrl } from '../../services/media-nest/download-url';
 import { type MediaNestClient, createMediaNestClient } from '../../services/media-nest/media-nest-client';
 
 /** Popup model dependency. */
 export type PopupDownloadModelDependencies = {
-  /** Active tab adapter. */
-  tabs: TabsAdapter;
   /** Storage adapter. */
   storage: StorageAdapter;
   /** Downloads adapter. */
@@ -42,8 +38,6 @@ export type PopupDownloadSnapshot = {
   options: DownloadOptions;
   /** 현재 상태. */
   status: PopupStatus;
-  /** 감지된 YouTube tab 정보. */
-  tabInfo: YoutubeTabInfo | null;
 };
 
 /** Popup model. */
@@ -68,14 +62,12 @@ const INITIAL_SNAPSHOT: PopupDownloadSnapshot = {
   canDownload: false,
   downloading: false,
   options: DEFAULT_DOWNLOAD_OPTIONS,
-  status: CHECKING_TAB_STATUS,
-  tabInfo: null,
+  status: MISSING_SOURCE_URL_STATUS,
 };
 
 /** Chrome runtime용 popup model을 만든다. */
 export function createChromePopupDownloadModel(): PopupDownloadModel {
   return createPopupDownloadModel({
-    tabs: createTabsAdapter(),
     storage: createStorageAdapter(),
     downloads: createDownloadsAdapter(),
     mediaNestClient: createMediaNestClient(),
@@ -97,29 +89,30 @@ export function createPopupDownloadModel(
     listeners.forEach((listener) => listener());
   }
 
-  /** 현재 옵션과 탭 상태를 기준으로 ready state를 계산한다. */
+  /** 현재 옵션과 URL 입력 상태를 기준으로 ready state를 계산한다. */
   function renderReadyState(baseSnapshot: PopupDownloadSnapshot): PopupDownloadSnapshot {
-    if (!baseSnapshot.tabInfo) {
+    if (!baseSnapshot.options.sourceUrl.trim()) {
       return {
         ...baseSnapshot,
         canDownload: false,
-        status: UNSUPPORTED_PAGE_STATUS,
+        status: MISSING_SOURCE_URL_STATUS,
       };
     }
 
     try {
       normalizeApiBaseUrl(baseSnapshot.options.apiBaseUrl);
+      normalizeSourceUrl(baseSnapshot.options.sourceUrl);
 
       return {
         ...baseSnapshot,
         canDownload: !baseSnapshot.downloading,
-        status: createReadyStatus(baseSnapshot.tabInfo.videoId),
+        status: createReadyStatus(),
       };
     } catch {
       return {
         ...baseSnapshot,
         canDownload: false,
-        status: MISSING_API_URL_STATUS,
+        status: INVALID_SOURCE_URL_STATUS,
       };
     }
   }
@@ -138,34 +131,15 @@ export function createPopupDownloadModel(
         options = DEFAULT_DOWNLOAD_OPTIONS;
       }
 
-      /** 현재 active tab URL. */
-      let activeTabUrl: string | null;
-
-      try {
-        activeTabUrl = await dependencies.tabs.getActiveTabUrl();
-      } catch (error) {
-        /** 사용자에게 표시할 active tab 조회 실패 메시지. */
-        const errorMessage =
-          error instanceof Error ? error.message : 'Could not read the active tab.';
-
-        setSnapshot({
-          ...snapshot,
-          canDownload: false,
-          options,
-          status: createDownloadFailedStatus(errorMessage),
-          tabInfo: null,
-        });
-        return;
-      }
-
-      /** 감지된 YouTube tab 정보. */
-      const tabInfo = detectYoutubeVideoId(activeTabUrl);
+      options = {
+        ...options,
+        sourceUrl: '',
+      };
 
       setSnapshot(
         renderReadyState({
           ...snapshot,
           options,
-          tabInfo,
         }),
       );
     },
@@ -181,7 +155,6 @@ export function createPopupDownloadModel(
       const submittedSnapshot = snapshot;
 
       if (
-        !submittedSnapshot.tabInfo ||
         submittedSnapshot.downloading ||
         !submittedSnapshot.canDownload
       ) {
@@ -201,10 +174,7 @@ export function createPopupDownloadModel(
         );
 
         /** Chrome downloads API에 전달할 다운로드 URL. */
-        const downloadUrl = buildDownloadUrl({
-          ...submittedSnapshot.options,
-          videoId: submittedSnapshot.tabInfo.videoId,
-        });
+        const downloadUrl = buildDownloadUrl(submittedSnapshot.options);
 
         await dependencies.downloads.startDownload(downloadUrl);
         /** 다운로드 시작 후 다시 실행 가능한 snapshot. */
@@ -246,6 +216,11 @@ export function createPopupDownloadModel(
           options,
         }),
       );
+
+      // sourceUrl은 session-only 입력이므로 Chrome storage 저장에서 제외한다.
+      if (key === 'sourceUrl') {
+        return;
+      }
 
       try {
         await dependencies.storage.saveOptions(options);

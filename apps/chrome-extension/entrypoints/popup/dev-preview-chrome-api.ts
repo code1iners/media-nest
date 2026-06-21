@@ -1,7 +1,4 @@
-import { DEFAULT_API_BASE_URL, STORAGE_KEYS } from '../../src/shared/constants';
-
-/** Dev preview 기본 active tab URL. */
-export const DEFAULT_DEV_PREVIEW_TAB_URL = 'https://www.youtube.com/watch?v=abc123_DEF0';
+import { STORAGE_KEYS } from '../../src/shared/constants';
 
 /** Dev preview option storage key. */
 const DEV_PREVIEW_STORAGE_KEY = 'media-nest-dev-preview-options';
@@ -28,7 +25,6 @@ export function hasChromeExtensionRuntime(target: typeof globalThis = globalThis
 
   return Boolean(
     chromeApi?.runtime &&
-      chromeApi.tabs &&
       chromeApi.storage?.local &&
       chromeApi.downloads,
   );
@@ -43,8 +39,6 @@ export function installDevPreviewChromeApi(options: InstallDevPreviewChromeApiOp
     return false;
   }
 
-  /** Preview query parameter. */
-  const params = new URLSearchParams(options.locationSearch ?? target.location?.search ?? '');
   /** Preview option storage. */
   const storage = options.storage ?? target.localStorage;
   /** Preview download URL opener. */
@@ -53,22 +47,10 @@ export function installDevPreviewChromeApi(options: InstallDevPreviewChromeApiOp
     ((url: string) => {
       target.open(url, '_blank');
     });
-  /** Preview active tab URL. */
-  const activeTabUrl = params.get('tabUrl') ?? DEFAULT_DEV_PREVIEW_TAB_URL;
   /** Preview 저장 option. */
-  let storedOptions = readStoredOptions(storage);
-  /** URL query가 지정한 API base URL. */
-  const queryApiBaseUrl = params.get('apiBaseUrl');
-
-  if (queryApiBaseUrl) {
-    storedOptions = {
-      ...storedOptions,
-      apiBaseUrl: queryApiBaseUrl,
-    };
-  }
+  const storedOptions = readStoredOptions(storage);
 
   target.chrome = createDevPreviewChromeApi({
-    activeTabUrl,
     openUrl,
     storage,
     storedOptions,
@@ -79,13 +61,10 @@ export function installDevPreviewChromeApi(options: InstallDevPreviewChromeApiOp
 
 /** Dev preview용 fake Chrome API를 만든다. */
 function createDevPreviewChromeApi({
-  activeTabUrl,
   openUrl,
   storage,
   storedOptions,
 }: {
-  /** Preview active tab URL. */
-  activeTabUrl: string;
   /** 다운로드 URL open 함수. */
   openUrl: (url: string) => void;
   /** Preview option storage. */
@@ -95,7 +74,6 @@ function createDevPreviewChromeApi({
 }): typeof chrome {
   /** 현재 preview option. */
   let currentOptions: DevPreviewStoredOptions = {
-    apiBaseUrl: DEFAULT_API_BASE_URL,
     ...storedOptions,
   };
 
@@ -103,11 +81,6 @@ function createDevPreviewChromeApi({
   const chromeApi = {
     runtime: {
       lastError: null,
-    },
-    tabs: {
-      query(_queryInfo: unknown, callback: (tabs: chrome.tabs.Tab[]) => void) {
-        callback([{ url: activeTabUrl } as chrome.tabs.Tab]);
-      },
     },
     storage: {
       local: {

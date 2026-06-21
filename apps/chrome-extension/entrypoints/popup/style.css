@@ -311,14 +311,14 @@ input {
   color: var(--text-muted);
 }
 
-.api-field {
+.source-field {
   padding: 6px;
   border: 1px solid var(--border-muted);
   border-radius: 4px;
   background: rgba(17, 24, 39, 0.45);
 }
 
-.api-field.has-warning {
+.source-field.has-warning {
   border-color: rgba(255, 107, 107, 0.7);
 }
 

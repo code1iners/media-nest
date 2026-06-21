@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_DEV_PREVIEW_TAB_URL,
   hasChromeExtensionRuntime,
   installDevPreviewChromeApi,
 } from '../../entrypoints/popup/dev-preview-chrome-api';
@@ -25,7 +24,7 @@ describe('dev preview chrome API', () => {
     /** 테스트용 global target. */
     const target = {
       location: {
-        search: '?apiBaseUrl=http://127.0.0.1:3031',
+        search: '',
       },
       open: vi.fn(),
     } as unknown as typeof globalThis;
@@ -43,14 +42,10 @@ describe('dev preview chrome API', () => {
     ).toBe(true);
     expect(hasChromeExtensionRuntime(target)).toBe(true);
 
-    /** Preview active tab 목록. */
-    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-      target.chrome.tabs.query({ active: true, currentWindow: true }, resolve);
-    });
     /** Preview storage option. */
     const options = await new Promise<Record<string, unknown>>((resolve) => {
       (target.chrome.storage.local.get as (keys: string[], callback: typeof resolve) => void)(
-        ['apiBaseUrl'],
+        ['filename', 'mode'],
         resolve,
       );
     });
@@ -62,8 +57,7 @@ describe('dev preview chrome API', () => {
       );
     });
 
-    expect(tabs[0]?.url).toBe(DEFAULT_DEV_PREVIEW_TAB_URL);
-    expect(options.apiBaseUrl).toBe('http://127.0.0.1:3031');
+    expect(options).toEqual({});
     expect(downloadId).toBe(1);
     expect(openUrl).toHaveBeenCalledWith('http://127.0.0.1:3031/audio/abc123_DEF0');
   });
@@ -72,7 +66,6 @@ describe('dev preview chrome API', () => {
     /** 실제 runtime처럼 보이는 Chrome API. */
     const chromeApi = {
       runtime: {},
-      tabs: {},
       storage: {
         local: {},
       },
