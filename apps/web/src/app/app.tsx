@@ -6,6 +6,7 @@ import {
   INITIAL_DOWNLOAD_DRAFT,
   buildDownloadUrl,
   downloadDraftSchema,
+  resolveDownloadFilename,
   validateDownloadDraft,
 } from '../domain/download-request/download-request';
 
@@ -13,8 +14,12 @@ import {
 export function App() {
   // States.
 
-  /** 마지막으로 생성한 다운로드 URL. */
-  const [generatedUrl, setGeneratedUrl] = useState('');
+  /** 다운로드 요청 진행 여부. */
+  const [isDownloading, setIsDownloading] = useState(false);
+  /** 다운로드 요청 결과 메시지. */
+  const [downloadMessage, setDownloadMessage] = useState('');
+  /** 다운로드 요청 실패 여부. */
+  const [downloadFailed, setDownloadFailed] = useState(false);
 
   // Hooks.
 
@@ -38,29 +43,44 @@ export function App() {
   /** 현재 입력 검증 결과. */
   const validation = validateDownloadDraft(draft);
   /** 다운로드 실행 가능 여부. */
-  const canSubmit = validation.kind === 'ready' && isValid;
+  const canSubmit = validation.kind === 'ready' && isValid && !isDownloading;
   /** 품질 입력 라벨. */
   const qualityLabel = draft.mode === 'audio' ? '최대 비트레이트' : '최대 해상도';
   /** 품질 입력 placeholder. */
   const qualityPlaceholder = draft.mode === 'audio' ? '192' : '720';
+  /** 사용자에게 표시할 현재 상태 메시지. */
+  const statusMessage = isDownloading
+    ? '다운로드 파일을 준비하고 있습니다.'
+    : downloadMessage || validation.message;
+  /** 현재 상태 메시지의 시각적 상태. */
+  const statusKind = downloadFailed ? 'invalid' : validation.kind;
 
   // Functions.
 
-  /** 입력 변경 후 생성된 URL을 초기화한다. */
-  function clearGeneratedUrl() {
-    setGeneratedUrl('');
+  /** 입력 변경 후 이전 다운로드 결과를 초기화한다. */
+  function clearDownloadResult() {
+    setDownloadMessage('');
+    setDownloadFailed(false);
   }
 
-  /** 생성한 다운로드 URL을 현재 브라우저에서 연다. */
-  function openDownloadUrl(downloadUrl: string) {
-    window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+  /** Blob 응답을 브라우저 다운로드로 전달한다. */
+  function saveBlob(blob: Blob, filename: string) {
+    /** 브라우저가 다운로드할 임시 object URL. */
+    const objectUrl = URL.createObjectURL(blob);
+    /** 다운로드를 시작하기 위한 임시 anchor. */
+    const downloadLink = document.createElement('a');
+
+    downloadLink.href = objectUrl;
+    downloadLink.download = filename;
+    downloadLink.click();
+    URL.revokeObjectURL(objectUrl);
   }
 
   // Handlers.
 
   /** 다운로드 형식 변경 이벤트를 처리한다. */
   function handleModeChange() {
-    clearGeneratedUrl();
+    clearDownloadResult();
     setValue('quality', '', {
       shouldDirty: true,
       shouldValidate: true,
@@ -68,15 +88,44 @@ export function App() {
   }
 
   /** 다운로드 실행 submit 이벤트를 처리한다. */
-  function handleDownloadSubmit(validDraft: DownloadDraft) {
+  async function handleDownloadSubmit(validDraft: DownloadDraft) {
     /** Media Nest API 다운로드 URL. */
     const downloadUrl = buildDownloadUrl(
       validDraft,
       import.meta.env.VITE_MEDIA_NEST_API_BASE_URL,
     );
 
-    setGeneratedUrl(downloadUrl);
-    openDownloadUrl(downloadUrl);
+    setIsDownloading(true);
+    clearDownloadResult();
+
+    try {
+      /** Media Nest API attachment 응답. */
+      const response = await fetch(downloadUrl);
+
+      if (!response.ok) {
+        throw new Error('다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
+
+      /** 브라우저 저장에 사용할 API 응답 파일명. */
+      const filename = resolveDownloadFilename(
+        validDraft,
+        response.headers.get('Content-Disposition'),
+      );
+      /** 브라우저에서 저장할 media blob. */
+      const blob = await response.blob();
+
+      saveBlob(blob, filename);
+      setDownloadMessage(`${filename} 다운로드를 시작했습니다.`);
+    } catch (error) {
+      setDownloadFailed(true);
+      setDownloadMessage(
+        error instanceof Error
+          ? error.message
+          : '다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.',
+      );
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   return (
@@ -94,7 +143,7 @@ export function App() {
               autoComplete="off"
               placeholder="https://www.youtube.com/watch?v=..."
               type="url"
-              {...register('sourceUrl', { onChange: clearGeneratedUrl })}
+              {...register('sourceUrl', { onChange: clearDownloadResult })}
             />
           </label>
 
@@ -126,7 +175,7 @@ export function App() {
               autoComplete="off"
               placeholder="선택 입력"
               type="text"
-              {...register('filename', { onChange: clearGeneratedUrl })}
+              {...register('filename', { onChange: clearDownloadResult })}
             />
           </label>
 
@@ -138,27 +187,18 @@ export function App() {
               placeholder={qualityPlaceholder}
               step={1}
               type="number"
-              {...register('quality', { onChange: clearGeneratedUrl })}
+              {...register('quality', { onChange: clearDownloadResult })}
             />
           </label>
 
-          <p className={`status-text status-text--${validation.kind}`} role="status">
-            {validation.message}
+          <p className={`status-text status-text--${statusKind}`} role="status">
+            {statusMessage}
           </p>
 
           <button className="primary-button" disabled={!canSubmit} type="submit">
-            다운로드 열기
+            {isDownloading ? '다운로드 준비 중' : '다운로드 시작'}
           </button>
         </form>
-
-        {generatedUrl ? (
-          <section className="result-section" aria-labelledby="result-title">
-            <h2 id="result-title">생성된 URL</h2>
-            <a href={generatedUrl} target="_blank" rel="noreferrer">
-              {generatedUrl}
-            </a>
-          </section>
-        ) : null}
       </section>
     </main>
   );

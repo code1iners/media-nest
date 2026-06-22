@@ -24,8 +24,16 @@ export type DownloadValidation =
       message: string;
     };
 
+/** 로컬 Media Nest API 서버 주소. */
+const LOCAL_API_BASE_URL = 'http://127.0.0.1:3030';
+
 /** 운영 Media Nest API 서버 주소. */
-export const DEFAULT_API_BASE_URL = 'https://media-nest.codeliners.cc';
+const PRODUCTION_API_BASE_URL = 'https://media-nest.codeliners.cc';
+
+/** 현재 실행 환경에 맞는 기본 Media Nest API 서버 주소. */
+export const DEFAULT_API_BASE_URL = import.meta.env.DEV
+  ? LOCAL_API_BASE_URL
+  : PRODUCTION_API_BASE_URL;
 
 /** API에서 거부하는 파일명 문자. */
 const BLOCKED_FILENAME_PATTERN = /[\/\\\0\r\n]/;
@@ -123,6 +131,26 @@ export function buildDownloadUrl(draft: DownloadDraft, apiBaseUrl = DEFAULT_API_
   return downloadUrl.toString();
 }
 
+/** API 응답 header와 입력값으로 브라우저 저장 파일명을 결정한다. */
+export function resolveDownloadFilename(
+  draft: DownloadDraft,
+  contentDisposition: string | null,
+) {
+  /** API가 내려준 attachment 파일명. */
+  const headerFilename = parseContentDispositionFilename(contentDisposition);
+
+  if (headerFilename) {
+    return headerFilename;
+  }
+
+  /** header가 없을 때 사용할 local fallback 파일명. */
+  const fallbackName = draft.filename.trim() || `media-nest-${draft.mode}`;
+  /** 다운로드 형식별 파일 확장자. */
+  const extension = draft.mode === 'audio' ? 'mp3' : 'mp4';
+
+  return `${fallbackName}.${extension}`;
+}
+
 /** API base URL을 .env 입력값 기준으로 정규화한다. */
 export function normalizeApiBaseUrl(apiBaseUrl = DEFAULT_API_BASE_URL) {
   /** .env에서 읽은 API base URL. */
@@ -179,4 +207,29 @@ function isSafeOptionalFilename(filename: string) {
 /** 비어 있거나 양의 정수인 품질 값인지 확인한다. */
 function isOptionalPositiveInteger(quality: string) {
   return !quality || POSITIVE_INTEGER_PATTERN.test(quality);
+}
+
+/** Content-Disposition header에서 RFC 5987 filename* 값을 추출한다. */
+function parseContentDispositionFilename(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return '';
+  }
+
+  /** 현재 API의 attachment filename* header 값. */
+  const encodedFilename = contentDisposition.match(/filename\*\s*=\s*([^;]+)/i)?.[1]?.trim();
+
+  if (!encodedFilename) {
+    return '';
+  }
+
+  /** 따옴표로 감싼 header value도 허용한다. */
+  const unquotedFilename = encodedFilename.replace(/^"|"$/g, '');
+  /** RFC 5987 charset/lang prefix 뒤의 encoded filename. */
+  const [, filename = unquotedFilename] = unquotedFilename.split("''");
+
+  try {
+    return decodeURIComponent(filename);
+  } catch {
+    return '';
+  }
 }

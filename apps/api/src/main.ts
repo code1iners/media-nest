@@ -19,7 +19,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Add CORS configs.
-  app.enableCors();
+  app.enableCors({
+    exposedHeaders: ['Content-Disposition', 'Content-Type'],
+  });
   // app.enableCors({
   //   origin: (origin, callback) => {
   //     if (!origin || allowedOrigins.includes(origin)) {

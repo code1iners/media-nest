@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { existsSync } from 'fs';
 import { exec as youtubeExec } from 'youtube-dl-exec';
 import { MediaDownloaderOptions } from './media-download-options';
 import { MediaDownloader } from './media-downloader.port';
@@ -8,6 +9,8 @@ import { MediaDownloader } from './media-downloader.port';
 type YoutubeDlProcess = {
   /** child process 이벤트 리스너. */
   on: (event: 'error' | 'close', listener: (...args: never[]) => void) => void;
+  /** youtube-dl-exec promise rejection을 처리한다. */
+  catch?: (listener: (error: Error) => void) => void;
   /** abort 시 가능한 경우 child process를 종료한다. */
   kill?: () => void;
 };
@@ -25,13 +28,19 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
       /** ffmpeg 경로는 호출 옵션을 우선하고 환경 설정을 fallback으로 사용한다. */
       const ffmpegLocation =
         options.ffmpegLocation ?? this.configService.get('FFMPEG_LOCATION');
+      /** 실제 존재하는 ffmpeg 경로만 yt-dlp에 전달한다. */
+      const availableFfmpegLocation =
+        ffmpegLocation && existsSync(ffmpegLocation) ? ffmpegLocation : '';
       /** youtube-dl-exec에 전달할 adapter 전용 공통 옵션. */
       const youtubeOptions = {
         addMetadata: true,
         format: options.format,
         ignoreErrors: true,
+        jsRuntimes: 'node' as const,
         output: options.outputPath,
-        ...(ffmpegLocation ? { ffmpegLocation } : {}),
+        ...(availableFfmpegLocation
+          ? { ffmpegLocation: availableFfmpegLocation }
+          : {}),
         ...(options.audioFormat ? { audioFormat: options.audioFormat } : {}),
         ...(options.extractAudio ? { extractAudio: options.extractAudio } : {}),
         ...(options.mergeOutputFormat
@@ -68,6 +77,12 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
       }
 
       options.signal?.addEventListener('abort', abortDownload, { once: true });
+
+      downloadProcess.catch?.((error: Error) => {
+        settle(() => {
+          reject(error);
+        });
+      });
 
       downloadProcess.on('error', (error: Error) => {
         settle(() => {
