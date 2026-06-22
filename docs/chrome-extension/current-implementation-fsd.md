@@ -11,9 +11,9 @@
 - popup entrypoint는 `entrypoints/popup/index.html`과 `entrypoints/popup/main.tsx`가 소유한다.
 - popup 중심 MVP이므로 `content_scripts`와 background entrypoint는 사용하지 않는다.
 - React popup UI는 `src/app/popup-app.tsx`가 소유한다.
-- `src/features/popup-download/popup-download-model.ts`는 popup 초기화, 설정 저장/로드, YouTube watch URL 입력 검증, `/health` 확인, 다운로드 시작 상태 전이를 담당한다.
-- `src/adapters/chrome/`는 `chrome.storage`, `chrome.downloads` callback API를 Promise 기반 adapter로 감싼다.
-- `src/domain/download-options/`, `src/services/media-nest/`는 Chrome runtime 없이 테스트 가능한 YouTube watch URL 검증과 API URL 생성을 담당한다.
+- `src/features/popup-download/popup-download-model.ts`는 popup 초기화, 설정 저장/로드, YouTube URL 입력 검증, 현재 탭 URL 가져오기, `/health` 확인, 다운로드 시작 상태 전이를 담당한다.
+- `src/adapters/chrome/`는 `chrome.storage`, `chrome.downloads`, `chrome.tabs` callback API를 Promise 기반 adapter로 감싼다.
+- `src/domain/download-options/`, `src/services/media-nest/`는 Chrome runtime 없이 테스트 가능한 YouTube URL 검증/정규화와 API URL 생성을 담당한다.
 - `public/icon-*.png`는 WXT가 generated manifest icon으로 발견해 build output에 복사한다.
 - `package.json`의 build script는 WXT production build 후 generated manifest/popup 정적 파일 참조와 permission을 검증하고, test script는 URL 검증, API URL 생성, storage key 호환성, popup 상태 전이를 검증한다.
 
@@ -22,10 +22,10 @@
 ### Popup 진입
 
 - 사용자가 확장 아이콘을 누르면 popup이 열린다.
-- Popup은 현재 탭 URL을 다운로드 조건으로 사용하지 않는다.
-- 사용자는 원본 URL을 직접 입력한다.
-- 원본 URL이 비어 있거나 YouTube watch URL 형식이 아니면 다운로드 액션을 비활성화하고 URL 입력 상태를 보여준다.
-- 원본 URL이 유효한 YouTube watch URL이면 다운로드 옵션과 실행 액션을 활성화한다.
+- Popup은 원본 URL 직접 입력을 기본 다운로드 조건으로 사용한다.
+- 사용자는 원본 URL을 직접 입력하거나 현재 탭 URL 가져오기 버튼을 누른다.
+- 원본 URL이 비어 있거나 지원 YouTube URL 형식이 아니면 다운로드 액션을 비활성화하고 URL 입력 상태를 보여준다.
+- 원본 URL이 유효한 YouTube URL이면 다운로드 옵션과 실행 액션을 활성화한다.
 
 ### 다운로드 모드
 
@@ -93,9 +93,10 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 ## URL 입력 규칙
 
 - `sourceUrl`은 비어 있으면 안 된다.
-- `sourceUrl`은 `youtube.com/watch` 또는 `www.youtube.com/watch` URL이어야 한다.
+- `sourceUrl`은 `youtube.com/watch`, `www.youtube.com/watch`, `youtu.be/{id}`, `www.youtu.be/{id}`, `youtube.com/shorts/{id}`, `www.youtube.com/shorts/{id}` URL이어야 한다.
 - `v` query 값은 11자 YouTube video ID 형식이어야 한다.
-- YouTube Shorts, `youtu.be`, 기타 `http/https` URL은 이번 확장 프로그램 MVP에서 지원하지 않는다.
+- `youtu.be`와 Shorts URL은 API 호출 전 `https://www.youtube.com/watch?v={id}` 형식으로 정규화한다.
+- 기타 `http/https` URL은 이번 확장 프로그램 MVP에서 지원하지 않는다.
 - 입력한 원본 URL은 기본적으로 Chrome storage에 저장하지 않는다.
 
 ## Popup 상태
@@ -103,8 +104,8 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 | 상태 | 조건 | 사용자 동작 |
 | --- | --- | --- |
 | Missing source URL | 원본 URL이 비어 있음 | URL 입력 필요 |
-| Invalid source URL | 원본 URL이 YouTube watch URL 형식이 아님 | URL 수정 필요 |
-| Ready | 원본 URL이 유효한 YouTube watch URL임 | 모드와 옵션을 선택해 다운로드 실행 |
+| Invalid source URL | 원본 URL이 지원 YouTube URL 형식이 아님 | URL 수정 필요 |
+| Ready | 원본 URL이 유효한 지원 YouTube URL임 | 모드와 옵션을 선택해 다운로드 실행 |
 | Checking server | `/health` 확인 중 | 다운로드 실행 대기 |
 | Server unavailable | `/health` 요청 실패 또는 비정상 응답 | 서버 상태 확인 또는 재시도 |
 | Download starting | 다운로드 URL을 열거나 다운로드 API 호출 중 | 중복 실행 방지 |
@@ -116,7 +117,7 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 
 - `storage`는 파일명, 모드, 비트레이트, 해상도 같은 non-sensitive 기본 옵션 저장에 사용한다.
 - `downloads` 권한은 Chrome downloads API로 다운로드를 시작하는 데 사용한다.
-- `activeTab`은 현재 탭 감지가 더 이상 필수 흐름이 아니므로 사용하지 않는다.
+- `activeTab`은 사용자가 버튼으로 현재 탭 URL을 가져올 때만 사용한다.
 - `content_scripts`는 popup 중심 MVP에서는 사용하지 않는다.
 - `host_permissions`는 `WXT_MEDIA_NEST_API_BASE_URL`의 origin만 허용한다. 운영 build는 `https://media-nest.codeliners.cc/*`, 로컬 dev는 `http://127.0.0.1:3030/*`만 필요하다.
 - manifest 값은 `wxt.config.ts`와 WXT popup entrypoint에서 생성되며, production output은 `.output/chrome-mv3/manifest.json`에 생성된다.
@@ -126,7 +127,7 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 - WXT popup entrypoint는 React app mount와 style import를 담당한다.
 - Popup application model은 설정 로드/저장, URL 입력 검증, API URL 생성, 다운로드 실행을 담당한다.
 - React component는 상태 렌더링과 사용자 입력 전달만 담당한다.
-- UI는 원본 URL, 다운로드 모드, 파일명, 오디오 비트레이트, 비디오 해상도 설정을 제공한다.
+- UI는 원본 URL, 현재 탭 URL 가져오기 버튼, 다운로드 모드, 파일명, 오디오 비트레이트, 비디오 해상도 설정을 제공한다.
 - API 서버 주소는 UI에 표시하거나 입력받지 않는다.
 
 ## 다운로드 실행 방식 결정
@@ -144,7 +145,8 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 - popup이 CSS와 script를 정상 로드한다.
 - 원본 URL 입력이 비어 있으면 다운로드 액션이 비활성화된다.
 - 원본 URL 입력이 유효하지 않으면 다운로드 액션이 비활성화되고 URL 오류 상태를 보여준다.
-- 원본 URL 입력이 유효한 YouTube watch URL이면 현재 탭 위치와 관계없이 다운로드 액션이 활성화된다.
+- 원본 URL 입력이 유효한 YouTube watch, youtu.be, Shorts URL이면 현재 탭 위치와 관계없이 다운로드 액션이 활성화된다.
+- 현재 탭 URL 가져오기 버튼은 지원 YouTube URL을 source URL 입력값으로 반영한다.
 - 오디오 모드에서 API 오디오 URL endpoint 다운로드 URL이 생성된다.
 - 비디오 모드에서 API 비디오 URL endpoint 다운로드 URL이 생성된다.
 - `filename`, `bitrate`, `resolution` 설정값이 생성 URL에 반영된다.
@@ -165,5 +167,4 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 - Chrome Web Store 배포 자동화
 - shared package로 API client 또는 URL builder 추출
 - 실제 다운로드 진행률 표시
-- 현재 탭 URL 가져오기 버튼
 - 입력 URL 저장 또는 최근 URL 목록

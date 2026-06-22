@@ -78,6 +78,9 @@ const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 /** 허용하는 YouTube host 목록. */
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com']);
 
+/** YouTube short URL host 목록. */
+const YOUTUBE_SHORT_HOSTS = new Set(['youtu.be', 'www.youtu.be']);
+
 /** 원본 YouTube URL을 API에 전달 가능한 형태로 정규화한다. */
 export function normalizeSourceUrl(sourceUrl: string | undefined): string {
   /** 사용자가 입력한 source URL. */
@@ -96,11 +99,18 @@ export function normalizeSourceUrl(sourceUrl: string | undefined): string {
     throw new Error('A valid source URL is required');
   }
 
-  if (!isYoutubeWatchUrl(url)) {
+  /** 원본 URL에서 추출한 YouTube video ID. */
+  const videoId = getYoutubeVideoId(url);
+
+  if (!videoId) {
     throw new Error('YouTube watch URL is required');
   }
 
-  return url.toString();
+  if (isYoutubeWatchUrl(url)) {
+    return url.toString();
+  }
+
+  return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
 /** YouTube watch URL인지 확인한다. */
@@ -114,6 +124,36 @@ function isYoutubeWatchUrl(url: URL): boolean {
     url.pathname === '/watch' &&
     YOUTUBE_VIDEO_ID_PATTERN.test(videoId)
   );
+}
+
+/** 지원 URL에서 YouTube video ID를 추출한다. */
+function getYoutubeVideoId(url: URL): string {
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    return '';
+  }
+
+  if (YOUTUBE_HOSTS.has(url.hostname) && url.pathname === '/watch') {
+    /** YouTube watch URL video ID. */
+    const videoId = url.searchParams.get('v') ?? '';
+
+    return YOUTUBE_VIDEO_ID_PATTERN.test(videoId) ? videoId : '';
+  }
+
+  if (YOUTUBE_SHORT_HOSTS.has(url.hostname)) {
+    /** youtu.be path video ID. */
+    const videoId = url.pathname.split('/').filter(Boolean)[0] ?? '';
+
+    return YOUTUBE_VIDEO_ID_PATTERN.test(videoId) ? videoId : '';
+  }
+
+  if (YOUTUBE_HOSTS.has(url.hostname) && url.pathname.startsWith('/shorts/')) {
+    /** YouTube Shorts path video ID. */
+    const videoId = url.pathname.split('/').filter(Boolean)[1] ?? '';
+
+    return YOUTUBE_VIDEO_ID_PATTERN.test(videoId) ? videoId : '';
+  }
+
+  return '';
 }
 
 /** 다운로드 모드 값인지 확인한다. */

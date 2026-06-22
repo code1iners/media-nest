@@ -1,5 +1,6 @@
 import { type DownloadsAdapter, createDownloadsAdapter } from '../../adapters/chrome/downloads';
 import { type StorageAdapter, createStorageAdapter } from '../../adapters/chrome/storage';
+import { type TabsAdapter, createTabsAdapter } from '../../adapters/chrome/tabs';
 import {
   type DownloadOptions,
   DEFAULT_DOWNLOAD_OPTIONS,
@@ -13,6 +14,7 @@ import {
   MISSING_SOURCE_URL_STATUS,
   type PopupStatus,
   createDownloadFailedStatus,
+  createInvalidSourceUrlStatus,
   createReadyStatus,
 } from '../../domain/popup-state/popup-state';
 import { buildDownloadUrl } from '../../services/media-nest/download-url';
@@ -24,6 +26,8 @@ export type PopupDownloadModelDependencies = {
   storage: StorageAdapter;
   /** Downloads adapter. */
   downloads: DownloadsAdapter;
+  /** Tabs adapter. */
+  tabs: TabsAdapter;
   /** Media Nest API client. */
   mediaNestClient: MediaNestClient;
 };
@@ -46,6 +50,8 @@ export type PopupDownloadModel = {
   getSnapshot(): PopupDownloadSnapshot;
   /** Popup 초기화를 수행한다. */
   initialize(): Promise<void>;
+  /** 현재 탭 URL을 source URL 입력값으로 가져온다. */
+  importCurrentTabUrl(): Promise<void>;
   /** Snapshot 변경 구독을 등록한다. */
   subscribe(listener: () => void): () => void;
   /** Download submit을 처리한다. */
@@ -70,6 +76,7 @@ export function createChromePopupDownloadModel(): PopupDownloadModel {
   return createPopupDownloadModel({
     storage: createStorageAdapter(),
     downloads: createDownloadsAdapter(),
+    tabs: createTabsAdapter(),
     mediaNestClient: createMediaNestClient(),
   });
 }
@@ -142,6 +149,34 @@ export function createPopupDownloadModel(
           options,
         }),
       );
+    },
+    async importCurrentTabUrl() {
+      try {
+        /** 현재 활성 탭 URL. */
+        const currentTabUrl = await dependencies.tabs.getCurrentTabUrl();
+        /** API에 전달할 정규화된 source URL. */
+        const sourceUrl = normalizeSourceUrl(currentTabUrl);
+
+        setSnapshot(
+          renderReadyState({
+            ...snapshot,
+            options: {
+              ...snapshot.options,
+              sourceUrl,
+            },
+          }),
+        );
+      } catch {
+        /** 현재 입력값 기준으로 재시도 가능 여부를 보존한 snapshot. */
+        const fallbackSnapshot = renderReadyState(snapshot);
+
+        setSnapshot({
+          ...fallbackSnapshot,
+          status: createInvalidSourceUrlStatus(
+            '현재 탭에서 지원하는 YouTube URL을 찾을 수 없습니다.',
+          ),
+        });
+      }
     },
     subscribe(listener) {
       listeners.add(listener);

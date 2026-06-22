@@ -63,15 +63,12 @@ function verifyManifestReferences(manifest) {
 
   assertIncludes(manifest.permissions, 'storage', 'manifest.json permissions');
   assertIncludes(manifest.permissions, 'downloads', 'manifest.json permissions');
+  assertIncludes(manifest.permissions, 'activeTab', 'manifest.json permissions');
   assertIncludes(
     manifest.host_permissions,
     createExpectedApiHostPermission(),
     'manifest.json host_permissions',
   );
-
-  if (manifest.permissions?.includes('activeTab')) {
-    validationErrors.push('manifest.json permissions should not include activeTab');
-  }
 
   if (manifest.host_permissions?.includes('<all_urls>')) {
     validationErrors.push('manifest.json host_permissions should not include <all_urls>');

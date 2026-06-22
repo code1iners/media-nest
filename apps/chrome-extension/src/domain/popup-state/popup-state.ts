@@ -24,7 +24,7 @@ export const MISSING_SOURCE_URL_STATUS: PopupStatus = {
 /** URL 형식 오류 상태. */
 export const INVALID_SOURCE_URL_STATUS: PopupStatus = {
   kind: 'invalid-source-url',
-  message: '올바른 YouTube watch URL을 입력하세요.',
+  message: '지원하는 YouTube URL을 입력하세요.',
 };
 
 /** 서버 확인 상태. */
@@ -44,6 +44,14 @@ export function createReadyStatus(): PopupStatus {
   return {
     kind: 'ready',
     message: '추출할 URL이 준비되었습니다.',
+  };
+}
+
+/** URL 형식 오류 상태를 만든다. */
+export function createInvalidSourceUrlStatus(message: string): PopupStatus {
+  return {
+    kind: 'invalid-source-url',
+    message,
   };
 }
 

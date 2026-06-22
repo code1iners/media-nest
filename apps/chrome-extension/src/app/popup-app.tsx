@@ -101,6 +101,10 @@ export function PopupApp() {
     void getPopupModel().submitDownload();
   }
 
+  function handleImportCurrentTabUrl() {
+    void getPopupModel().importCurrentTabUrl();
+  }
+
   return (
     <main className="popup-shell" data-status={snapshot.status.kind}>
       <header className="loot-banner">
@@ -130,7 +134,7 @@ export function PopupApp() {
       <form className="download-form" onSubmit={handleSubmit}>
         <label className={shouldEmphasizeSourceUrl ? 'field source-field has-warning' : 'field source-field'}>
           <span className="field-label">추출 URL</span>
-          <span className="field-description">YouTube watch URL을 붙여넣으세요.</span>
+          <span className="field-description">YouTube watch, Shorts, youtu.be URL을 붙여넣으세요.</span>
           <input
             autoComplete="off"
             name="sourceUrl"
@@ -139,6 +143,14 @@ export function PopupApp() {
             value={snapshot.options.sourceUrl}
             onChange={handleTextOptionChange('sourceUrl')}
           />
+          <button
+            className="secondary-button"
+            disabled={snapshot.downloading}
+            type="button"
+            onClick={handleImportCurrentTabUrl}
+          >
+            현재 탭 사용
+          </button>
         </label>
 
         <fieldset className="mode-group">

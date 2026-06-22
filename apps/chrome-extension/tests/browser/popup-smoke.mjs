@@ -54,13 +54,15 @@ if (isDevSmoke) {
 /** Browser smoke용 static output server. */
 const staticServer = await createStaticServer(extensionOutputRoot);
 
-try {
-  await verifyLoadUnpackedPopup(extensionOutputRoot);
-  console.error('[popup-smoke] load unpacked popup ok');
-  await verifyMissingSourceUrlFlow(staticServer.origin);
-  console.error('[popup-smoke] missing source URL flow ok');
-  /** 서버 실패 flow에서 수집한 fake API 요청. */
-  const unavailableFakeApiRequests = await verifyServerUnavailableFlow(staticServer.origin);
+  try {
+    await verifyLoadUnpackedPopup(extensionOutputRoot);
+    console.error('[popup-smoke] load unpacked popup ok');
+    await verifyMissingSourceUrlFlow(staticServer.origin);
+    console.error('[popup-smoke] missing source URL flow ok');
+    await verifyCurrentTabImportFlow(staticServer.origin);
+    console.error('[popup-smoke] current tab import flow ok');
+    /** 서버 실패 flow에서 수집한 fake API 요청. */
+    const unavailableFakeApiRequests = await verifyServerUnavailableFlow(staticServer.origin);
   console.error('[popup-smoke] server unavailable flow ok');
   /** 다운로드 flow에서 수집한 fake API 요청. */
   const fakeApiRequests = await verifyDownloadFlow(staticServer.origin);
@@ -174,6 +176,35 @@ async function verifyMissingSourceUrlFlow(origin) {
 
     await expectStatusText(page, '추출할 URL을 입력하세요.');
     await expectDownloadButtonDisabled(page, true);
+  } finally {
+    await browser.close();
+  }
+}
+
+/** Built popup에서 현재 탭 URL 가져오기 흐름을 확인한다. */
+async function verifyCurrentTabImportFlow(origin) {
+  /** Browser instance. */
+  const browser = await chromium.launch();
+  /** Browser page. */
+  const page = await browser.newPage();
+
+  try {
+    await installFakeChromeApi(page, {
+      currentTabUrl: 'https://youtu.be/abc123_DEF0',
+      storedOptions: {},
+    });
+    await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
+
+    await page.getByRole('button', { name: '현재 탭 사용' }).click();
+    await expectStatusText(page, '추출할 URL이 준비되었습니다.');
+    await expectDownloadButtonDisabled(page, false);
+
+    /** 현재 탭에서 가져온 source URL 입력값. */
+    const sourceUrl = await page.getByLabel('추출 URL').inputValue();
+
+    if (sourceUrl !== 'https://www.youtube.com/watch?v=abc123_DEF0') {
+      throw new Error(`Unexpected imported source URL: ${sourceUrl}`);
+    }
   } finally {
     await browser.close();
   }
@@ -312,6 +343,8 @@ async function installFakeChromeApi(page, options) {
   await page.addInitScript((chromeOptions) => {
     globalThis.__mediaNestStoredOptions = chromeOptions.storedOptions;
     globalThis.__mediaNestDownloadUrl = null;
+    globalThis.__mediaNestCurrentTabUrl =
+      chromeOptions.currentTabUrl ?? 'https://www.youtube.com/watch?v=abc123_DEF0';
     globalThis.chrome = {
       runtime: {
         lastError: null,
@@ -332,6 +365,17 @@ async function installFakeChromeApi(page, options) {
           globalThis.__mediaNestDownloadUrl = downloadOptions.url;
           await fetch(downloadOptions.url);
           callback(1);
+        },
+      },
+      tabs: {
+        query(_queryInfo, callback) {
+          callback([
+            {
+              active: true,
+              id: 1,
+              url: globalThis.__mediaNestCurrentTabUrl,
+            },
+          ]);
         },
       },
     };

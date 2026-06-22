@@ -24,9 +24,10 @@ export function hasChromeExtensionRuntime(target: typeof globalThis = globalThis
   const chromeApi = target.chrome;
 
   return Boolean(
-    chromeApi?.runtime &&
+      chromeApi?.runtime &&
       chromeApi.storage?.local &&
-      chromeApi.downloads,
+      chromeApi.downloads &&
+      chromeApi.tabs,
   );
 }
 
@@ -118,6 +119,17 @@ function createDevPreviewChromeApi({
       download(downloadOptions: { url: string }, callback?: (downloadId?: number) => void) {
         openUrl(downloadOptions.url);
         callback?.(1);
+      },
+    },
+    tabs: {
+      query(_queryInfo: chrome.tabs.QueryInfo, callback: (tabs: chrome.tabs.Tab[]) => void) {
+        callback([
+          {
+            active: true,
+            id: 1,
+            url: 'https://www.youtube.com/watch?v=abc123_DEF0',
+          } as chrome.tabs.Tab,
+        ]);
       },
     },
   };

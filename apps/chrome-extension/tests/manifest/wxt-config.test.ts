@@ -21,9 +21,8 @@ describe('WXT config', () => {
 
     expect(testableConfig.modules).toContain('@wxt-dev/module-react');
     expect(testableConfig.manifest?.permissions).toEqual(
-      expect.arrayContaining(['storage', 'downloads']),
+      expect.arrayContaining(['storage', 'downloads', 'activeTab']),
     );
-    expect(testableConfig.manifest?.permissions).not.toContain('activeTab');
     expect(testableConfig.manifest?.host_permissions).toEqual([
       'https://media-nest.codeliners.cc/*',
     ]);

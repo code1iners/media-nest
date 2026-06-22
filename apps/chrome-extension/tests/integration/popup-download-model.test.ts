@@ -22,6 +22,9 @@ function createDependencies(
     downloads: {
       startDownload: vi.fn().mockResolvedValue(1),
     },
+    tabs: {
+      getCurrentTabUrl: vi.fn().mockResolvedValue('https://youtu.be/abc123_DEF0'),
+    },
     mediaNestClient: {
       assertServerAvailable: vi.fn().mockResolvedValue(undefined),
     },
@@ -102,7 +105,59 @@ describe('popup download model', () => {
       canDownload: false,
       status: {
         kind: 'invalid-source-url',
-        message: '올바른 YouTube watch URL을 입력하세요.',
+        message: '지원하는 YouTube URL을 입력하세요.',
+      },
+    });
+  });
+
+  it('imports a supported current tab URL without persisting it', async () => {
+    /** Popup model dependency. */
+    const dependencies = createDependencies({
+      tabs: {
+        getCurrentTabUrl: vi.fn().mockResolvedValue('https://www.youtube.com/shorts/abc123_DEF0'),
+      },
+    });
+    /** Popup download model. */
+    const model = createPopupDownloadModel(dependencies);
+
+    await model.initialize();
+    await model.importCurrentTabUrl();
+
+    expect(dependencies.storage.saveOptions).not.toHaveBeenCalled();
+    expect(model.getSnapshot()).toMatchObject({
+      canDownload: true,
+      options: {
+        sourceUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
+      },
+      status: {
+        kind: 'ready',
+        message: '추출할 URL이 준비되었습니다.',
+      },
+    });
+  });
+
+  it('keeps the entered URL when the current tab URL is unsupported', async () => {
+    /** Popup model dependency. */
+    const dependencies = createDependencies({
+      tabs: {
+        getCurrentTabUrl: vi.fn().mockResolvedValue('https://example.com/watch?v=abc123_DEF0'),
+      },
+    });
+    /** Popup download model. */
+    const model = createPopupDownloadModel(dependencies);
+
+    await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
+    await model.importCurrentTabUrl();
+
+    expect(model.getSnapshot()).toMatchObject({
+      canDownload: true,
+      options: {
+        sourceUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
+      },
+      status: {
+        kind: 'invalid-source-url',
+        message: '현재 탭에서 지원하는 YouTube URL을 찾을 수 없습니다.',
       },
     });
   });

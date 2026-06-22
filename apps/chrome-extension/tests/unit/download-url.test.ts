@@ -19,6 +19,12 @@ describe('download URL behavior', () => {
     expect(normalizeSourceUrl('https://youtube.com/watch?v=abc123_DEF0&t=10s')).toBe(
       'https://youtube.com/watch?v=abc123_DEF0&t=10s',
     );
+    expect(normalizeSourceUrl('https://youtu.be/abc123_DEF0')).toBe(
+      'https://www.youtube.com/watch?v=abc123_DEF0',
+    );
+    expect(normalizeSourceUrl('https://www.youtube.com/shorts/abc123_DEF0')).toBe(
+      'https://www.youtube.com/watch?v=abc123_DEF0',
+    );
   });
 
   it('builds an audio download URL with optional query values', () => {
@@ -95,7 +101,10 @@ describe('download URL behavior', () => {
     expect(() => normalizeSourceUrl('https://example.com/watch?v=abc123_DEF0')).toThrow(
       'YouTube watch URL is required',
     );
-    expect(() => normalizeSourceUrl('https://youtu.be/abc123_DEF0')).toThrow(
+    expect(() => normalizeSourceUrl('https://youtu.be/invalid')).toThrow(
+      'YouTube watch URL is required',
+    );
+    expect(() => normalizeSourceUrl('https://www.youtube.com/shorts/invalid')).toThrow(
       'YouTube watch URL is required',
     );
   });

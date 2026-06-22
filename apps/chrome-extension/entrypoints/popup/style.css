@@ -322,6 +322,32 @@ input {
   border-color: rgba(255, 107, 107, 0.7);
 }
 
+.secondary-button {
+  min-height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 0 var(--shadow-deep);
+  cursor: pointer;
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: var(--accent-mint);
+}
+
+.secondary-button:focus-visible {
+  outline: 2px solid var(--accent-mint);
+  outline-offset: 2px;
+}
+
+.secondary-button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 .primary-button {
   min-height: 42px;
   margin-top: 2px;

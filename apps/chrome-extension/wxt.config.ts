@@ -25,7 +25,7 @@ export default defineConfig({
   manifest: {
     name: 'MyTube Extract',
     description: 'YouTube 영상을 오디오 또는 비디오로 추출하는 보조 도구입니다.',
-    permissions: ['storage', 'downloads'],
+    permissions: ['storage', 'downloads', 'activeTab'],
     host_permissions: [createApiHostPermission()],
   },
 });

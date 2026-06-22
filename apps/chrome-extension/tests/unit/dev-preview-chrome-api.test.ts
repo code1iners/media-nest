@@ -56,9 +56,14 @@ describe('dev preview chrome API', () => {
         resolve,
       );
     });
+    /** Preview current tab query result. */
+    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+      target.chrome.tabs.query({ active: true, lastFocusedWindow: true }, resolve);
+    });
 
     expect(options).toEqual({});
     expect(downloadId).toBe(1);
+    expect(tabs[0]?.url).toBe('https://www.youtube.com/watch?v=abc123_DEF0');
     expect(openUrl).toHaveBeenCalledWith('http://127.0.0.1:3031/audio/abc123_DEF0');
   });
 
@@ -70,6 +75,7 @@ describe('dev preview chrome API', () => {
         local: {},
       },
       downloads: {},
+      tabs: {},
     };
     /** 테스트용 global target. */
     const target = {
