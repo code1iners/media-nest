@@ -30,6 +30,7 @@ cp .env.example .env.production
 - `FFMPEG_LOCATION`: ffmpeg 실행 파일 경로
 - `MEDIA_DOWNLOAD_TIMEOUT_MS`: 다운로드 생성 타임아웃. 비워두면 기존처럼 제한하지 않음
 - `MEDIA_DOWNLOAD_CONCURRENCY`: 동시 다운로드 생성 제한. 비워두면 기존처럼 제한하지 않음
+- `MEDIA_DOWNLOAD_QUEUE_LIMIT`: `/downloads` job API 대기열 제한. 비워두면 기본 20
 - `EXPECTED_NODE_MAJOR`: 런타임 검증 시 기대하는 Node.js major 버전
 - `EXPECTED_YT_DLP_VERSION`: 런타임 검증 시 기대하는 yt-dlp 버전
 - `EXPECTED_FFMPEG_LOCATION`: 런타임 검증 시 기대하는 ffmpeg 실행 파일 경로
@@ -137,7 +138,29 @@ docker compose up -d --build
 
 자세한 API 제품 범위와 기능 계약은 `docs/api/current-implementation-prd.md`, `docs/api/current-implementation-fsd.md`를 기준으로 한다.
 
-비디오 다운로드:
+웹 앱용 job 기반 다운로드:
+
+```text
+POST /downloads
+GET /downloads/{JOB_ID}
+GET /downloads/{JOB_ID}/file
+DELETE /downloads/{JOB_ID}
+```
+
+`POST /downloads` body:
+
+```json
+{
+  "type": "audio",
+  "url": "https://www.youtube.com/watch?v=...",
+  "filename": "sample",
+  "quality": "192"
+}
+```
+
+응답은 `jobId`, `status`, `statusUrl`, `fileUrl`을 반환한다. `ready` 상태가 되면 `fileUrl`을 브라우저 다운로드로 열 수 있다. `queued`/`running` 상태의 파일 요청은 `409`를 반환한다.
+
+호환용 직접 비디오 다운로드:
 
 ```text
 GET /video?url={MEDIA_URL}
@@ -145,7 +168,7 @@ GET /video/{YOUTUBE_VIDEO_ID}
 GET /video/{YOUTUBE_VIDEO_ID}?filename=sample&resolution=720
 ```
 
-오디오 다운로드:
+호환용 직접 오디오 다운로드:
 
 ```text
 GET /audio?url={MEDIA_URL}
@@ -159,12 +182,14 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 - `id`는 11자 YouTube 영상 ID 형식이어야 한다.
 - `resolution`과 `bitrate`는 양의 정수여야 한다.
 - `filename`에는 경로 구분자나 제어 문자를 넣을 수 없다.
+- `/downloads`의 `quality`는 `type=audio`일 때 `bitrate`, `type=video`일 때 `resolution`으로 해석한다.
 
 다운로드 처리:
 
 - 요청 검증, 다운로드 생성, HTTP 파일 전송은 분리된 경계에서 처리한다.
 - `youtube-dl-exec` 실행은 adapter 뒤에 격리되어 있고, 서비스는 오디오/비디오 포맷 선택만 담당한다.
 - 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 generic 메시지를 사용한다.
+- `/downloads`는 in-memory FIFO queue를 사용한다. 서버 재시작 후 job 복구는 지원하지 않는다.
 - non-YouTube `http/https` URL 허용은 현재 호환성을 위해 유지한다. YouTube-only source policy는 별도 결정 후 활성화한다.
 
 ## CORS

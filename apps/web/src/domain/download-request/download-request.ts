@@ -24,6 +24,73 @@ export type DownloadValidation =
       message: string;
     };
 
+/** 다운로드 job 상태. */
+export type DownloadJobStatus =
+  | 'queued'
+  | 'running'
+  | 'ready'
+  | 'failed'
+  | 'canceled'
+  | 'expired';
+
+/** 다운로드 job 상태 응답. */
+export type DownloadJobSnapshot = {
+  /** 다운로드 job ID. */
+  jobId: string;
+  /** 다운로드 형식. */
+  type: DownloadMode;
+  /** 현재 다운로드 job 상태. */
+  status: DownloadJobStatus;
+  /** 생성 시각. */
+  createdAt: string;
+  /** 마지막 변경 시각. */
+  updatedAt: string;
+  /** 사용자에게 보여줄 상태 메시지. */
+  message?: string;
+};
+
+/** 다운로드 job 생성 응답. */
+export type CreateDownloadJobResponse = DownloadJobSnapshot & {
+  /** 상태 조회 URL. */
+  statusUrl: string;
+  /** 파일 다운로드 URL. */
+  fileUrl: string;
+};
+
+/** 다운로드 job 생성 요청. */
+export type CreateDownloadJobRequest = {
+  /** API 요청 URL. */
+  url: string;
+  /** API 요청 body. */
+  body: {
+    /** 다운로드 형식. */
+    type: DownloadMode;
+    /** 다운로드할 원본 URL. */
+    url: string;
+    /** 선택 파일명. */
+    filename?: string;
+    /** 선택 품질 값. */
+    quality?: string;
+  };
+};
+
+/** fetch 호환 함수. */
+export type DownloadFetch = typeof fetch;
+
+/** 다운로드 job polling 옵션. */
+export type WaitForDownloadJobFileUrlOptions = {
+  /** API base URL. */
+  apiBaseUrl?: string;
+  /** 테스트에서 대체할 fetch 함수. */
+  fetcher?: DownloadFetch;
+  /** polling 중단 신호. */
+  signal?: AbortSignal;
+  /** polling 간격. */
+  intervalMs?: number;
+  /** 상태 변경 콜백. */
+  onStatus?: (snapshot: DownloadJobSnapshot) => void;
+};
+
 /** 로컬 MyTube Extract API 서버 주소. */
 const LOCAL_API_BASE_URL = 'http://127.0.0.1:3030';
 
@@ -40,6 +107,9 @@ const BLOCKED_FILENAME_PATTERN = /[\/\\\0\r\n]/;
 
 /** 양의 정수 문자열 형식. */
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/;
+
+/** 기본 다운로드 job polling 간격. */
+const DEFAULT_POLL_INTERVAL_MS = 1500;
 
 /** 다운로드 요청 입력값 schema. */
 export const downloadDraftSchema = z.object({
@@ -106,29 +176,117 @@ export function validateDownloadDraft(draft: DownloadDraft): DownloadValidation 
   };
 }
 
-/** MyTube Extract API 다운로드 URL을 만든다. */
-export function buildDownloadUrl(draft: DownloadDraft, apiBaseUrl = DEFAULT_API_BASE_URL) {
+/** MyTube Extract API 다운로드 job 생성 요청을 만든다. */
+export function buildCreateDownloadJobRequest(
+  draft: DownloadDraft,
+  apiBaseUrl = DEFAULT_API_BASE_URL,
+): CreateDownloadJobRequest {
   /** schema를 통과한 다운로드 입력값. */
   const parsedDraft = downloadDraftSchema.parse(draft);
-  /** 정규화된 API server base URL. */
-  const normalizedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
-  /** API 다운로드 URL. */
-  const downloadUrl = new URL(`${normalizedApiBaseUrl}/${parsedDraft.mode}`);
-
-  downloadUrl.searchParams.set('url', parsedDraft.sourceUrl);
+  /** 다운로드 job 생성 요청 body. */
+  const body: CreateDownloadJobRequest['body'] = {
+    type: parsedDraft.mode,
+    url: parsedDraft.sourceUrl,
+  };
 
   if (parsedDraft.filename) {
-    downloadUrl.searchParams.set('filename', parsedDraft.filename);
+    body.filename = parsedDraft.filename;
   }
 
   if (parsedDraft.quality) {
-    downloadUrl.searchParams.set(
-      parsedDraft.mode === 'audio' ? 'bitrate' : 'resolution',
-      parsedDraft.quality,
-    );
+    body.quality = parsedDraft.quality;
   }
 
-  return downloadUrl.toString();
+  return {
+    body,
+    url: buildApiUrl('/downloads', apiBaseUrl),
+  };
+}
+
+/** 다운로드 job을 생성한다. */
+export async function createDownloadJob(
+  draft: DownloadDraft,
+  options: { apiBaseUrl?: string; fetcher?: DownloadFetch; signal?: AbortSignal } = {},
+) {
+  /** 다운로드 job 생성 요청. */
+  const request = buildCreateDownloadJobRequest(draft, options.apiBaseUrl);
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** 다운로드 job 생성 응답. */
+  const response = await fetcher(request.url, {
+    body: JSON.stringify(request.body),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error('Download job create failed.');
+  }
+
+  return (await response.json()) as CreateDownloadJobResponse;
+}
+
+/** 다운로드 job이 ready가 될 때까지 기다리고 파일 URL을 반환한다. */
+export async function waitForDownloadJobFileUrl(
+  job: CreateDownloadJobResponse,
+  options: WaitForDownloadJobFileUrlOptions = {},
+) {
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** polling 간격. */
+  const intervalMs = options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+
+  if (job.status === 'ready') {
+    return buildApiUrl(job.fileUrl, options.apiBaseUrl);
+  }
+
+  while (true) {
+    await wait(intervalMs, options.signal);
+
+    /** 다운로드 job 상태 응답. */
+    const response = await fetcher(buildApiUrl(job.statusUrl, options.apiBaseUrl), {
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('Download job status failed.');
+    }
+
+    /** 현재 다운로드 job 상태. */
+    const snapshot = (await response.json()) as DownloadJobSnapshot;
+
+    options.onStatus?.(snapshot);
+
+    if (snapshot.status === 'ready') {
+      return buildApiUrl(job.fileUrl, options.apiBaseUrl);
+    }
+
+    if (['failed', 'canceled', 'expired'].includes(snapshot.status)) {
+      throw new Error(snapshot.message ?? 'Download job failed.');
+    }
+  }
+}
+
+/** 다운로드 job을 취소한다. */
+export async function cancelDownloadJob(
+  job: DownloadJobSnapshot,
+  options: { apiBaseUrl?: string; fetcher?: DownloadFetch } = {},
+) {
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** 다운로드 job 취소 응답. */
+  const response = await fetcher(buildApiUrl(`/downloads/${job.jobId}`, options.apiBaseUrl), {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Download job cancel failed.');
+  }
+
+  return (await response.json()) as DownloadJobSnapshot;
 }
 
 /** API base URL을 .env 입력값 기준으로 정규화한다. */
@@ -146,6 +304,43 @@ export function normalizeApiBaseUrl(apiBaseUrl = DEFAULT_API_BASE_URL) {
   parsedApiBaseUrl.hash = '';
 
   return parsedApiBaseUrl.toString().replace(/\/$/, '');
+}
+
+/** API base URL의 path prefix를 보존해 endpoint URL을 만든다. */
+export function buildApiUrl(path: string, apiBaseUrl = DEFAULT_API_BASE_URL) {
+  /** 정규화된 API server base URL. */
+  const normalizedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
+  /** 앞쪽 slash를 제거한 endpoint path. */
+  const normalizedPath = path.replace(/^\/+/, '');
+
+  return `${normalizedApiBaseUrl}/${normalizedPath}`;
+}
+
+/** polling 간격만큼 대기한다. */
+function wait(intervalMs: number, signal?: AbortSignal) {
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError());
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    /** polling timer 식별자. */
+    const timeout = globalThis.setTimeout(() => {
+      signal?.removeEventListener('abort', handleAbort);
+      resolve();
+    }, intervalMs);
+    /** abort 시 timer를 정리하고 promise를 종료한다. */
+    const handleAbort = () => {
+      globalThis.clearTimeout(timeout);
+      reject(createAbortError());
+    };
+
+    signal?.addEventListener('abort', handleAbort, { once: true });
+  });
+}
+
+/** 브라우저/테스트 환경 공통 AbortError를 만든다. */
+function createAbortError() {
+  return new DOMException('Aborted', 'AbortError');
 }
 
 /** URL 형식인지 확인한다. */

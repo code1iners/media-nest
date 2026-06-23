@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AudioModule } from './audio/audio.module';
+import { DownloadsModule } from './downloads/downloads.module';
 import { HealthModule } from './health/health.module';
 import { VideoModule } from './video/video.module';
 
@@ -11,6 +12,7 @@ import { VideoModule } from './video/video.module';
       isGlobal: true,
     }),
     VideoModule,
+    DownloadsModule,
     HealthModule,
     AudioModule,
   ],

@@ -14,6 +14,8 @@ export type MediaDownloadJob = {
   format: string;
   /** client-facing generic 실패 메시지. */
   failureMessage: string;
+  /** 외부 작업 취소 신호. */
+  signal?: AbortSignal;
   /** 오디오 추출 여부. */
   extractAudio?: boolean;
   /** 오디오 추출 포맷. */

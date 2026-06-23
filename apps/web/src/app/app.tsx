@@ -1,12 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
+  type CreateDownloadJobResponse,
   type DownloadDraft,
+  type DownloadJobSnapshot,
   INITIAL_DOWNLOAD_DRAFT,
-  buildDownloadUrl,
+  cancelDownloadJob,
+  createDownloadJob,
   downloadDraftSchema,
   validateDownloadDraft,
+  waitForDownloadJobFileUrl,
 } from '../domain/download-request/download-request';
 
 /** MyTube Extract Vite CSR web app. */
@@ -17,6 +21,13 @@ export function App() {
   const [downloadMessage, setDownloadMessage] = useState('');
   /** 다운로드 요청 실패 여부. */
   const [downloadFailed, setDownloadFailed] = useState(false);
+  /** 현재 생성되어 진행 중인 다운로드 job. */
+  const [activeJob, setActiveJob] = useState<DownloadJobSnapshot | null>(null);
+
+  // Refs.
+
+  /** 현재 polling을 중단하기 위한 컨트롤러. */
+  const pollingAbortControllerRef = useRef<AbortController | null>(null);
 
   // Hooks.
 
@@ -40,7 +51,9 @@ export function App() {
   /** 현재 입력 검증 결과. */
   const validation = validateDownloadDraft(draft);
   /** 다운로드 실행 가능 여부. */
-  const canSubmit = validation.kind === 'ready' && isValid;
+  const isJobActive = activeJob?.status === 'queued' || activeJob?.status === 'running';
+  /** 다운로드 실행 가능 여부. */
+  const canSubmit = validation.kind === 'ready' && isValid && !isJobActive;
   /** 품질 입력 라벨. */
   const qualityLabel = draft.mode === 'audio' ? '최대 비트레이트' : '최대 해상도';
   /** 품질 입력 placeholder. */
@@ -49,7 +62,9 @@ export function App() {
   const statusMessage = downloadMessage || validation.message;
   /** 현재 상태 메시지의 시각적 상태. */
   const statusTone =
-    downloadFailed || validation.kind === 'invalid'
+    isJobActive
+      ? 'info'
+      : downloadFailed || validation.kind === 'invalid'
       ? 'danger'
       : validation.kind === 'ready'
         ? 'success'
@@ -57,6 +72,8 @@ export function App() {
   /** 현재 상태를 짧게 보여주는 브랜드식 label. */
   const statusLabel = downloadFailed
     ? 'ERROR'
+    : isJobActive
+      ? 'WORK'
     : downloadMessage
       ? 'LOOT'
       : validation.kind === 'ready'
@@ -69,20 +86,61 @@ export function App() {
 
   /** 입력 변경 후 이전 다운로드 결과를 초기화한다. */
   function clearDownloadResult() {
+    if (isJobActive) {
+      return;
+    }
+
     setDownloadMessage('');
     setDownloadFailed(false);
   }
 
+  /** API base URL 환경 설정을 반환한다. */
+  function getApiBaseUrl() {
+    return (
+      import.meta.env.VITE_MYTUBE_EXTRACT_API_BASE_URL ??
+      import.meta.env.VITE_MEDIA_NEST_API_BASE_URL
+    );
+  }
+
+  /** 현재 polling만 중단한다. 서버 job 취소는 별도 handler가 담당한다. */
+  function stopPolling() {
+    pollingAbortControllerRef.current?.abort();
+    pollingAbortControllerRef.current = null;
+  }
+
+  /** job 상태를 사용자 메시지로 바꾼다. */
+  function getJobStatusMessage(job: DownloadJobSnapshot) {
+    if (job.status === 'queued') {
+      return '다운로드 파일을 준비 중입니다.';
+    }
+
+    if (job.status === 'running') {
+      return '다운로드 파일을 준비 중입니다.';
+    }
+
+    return job.message ?? '다운로드 작업 상태를 확인했습니다.';
+  }
+
   /** API attachment URL을 브라우저 다운로드 매니저로 넘긴다. */
   function startBrowserDownload(downloadUrl: string) {
-    /** 다운로드를 시작하기 위한 임시 anchor. */
-    const downloadLink = document.createElement('a');
+    /** 현재 화면을 유지한 채 attachment 응답만 호출하는 숨김 frame. */
+    const downloadFrame = document.createElement('iframe');
 
-    downloadLink.href = downloadUrl;
-    downloadLink.rel = 'noopener';
-    downloadLink.target = '_blank';
-    downloadLink.click();
+    downloadFrame.hidden = true;
+    downloadFrame.src = downloadUrl;
+    document.body.append(downloadFrame);
+    window.setTimeout(() => {
+      downloadFrame.remove();
+    }, 60_000);
   }
+
+  // Effects.
+
+  useEffect(function cleanupDownloadPolling() {
+    return () => {
+      stopPolling();
+    };
+  }, []);
 
   // Handlers.
 
@@ -96,22 +154,76 @@ export function App() {
   }
 
   /** 다운로드 실행 submit 이벤트를 처리한다. */
-  function handleDownloadSubmit(validDraft: DownloadDraft) {
+  async function handleDownloadSubmit(validDraft: DownloadDraft) {
     clearDownloadResult();
+    stopPolling();
 
     try {
-      /** MyTube Extract API 다운로드 URL. */
-      const downloadUrl = buildDownloadUrl(
-        validDraft,
-        import.meta.env.VITE_MYTUBE_EXTRACT_API_BASE_URL ??
-          import.meta.env.VITE_MEDIA_NEST_API_BASE_URL,
-      );
+      /** 새 다운로드 job polling 컨트롤러. */
+      const abortController = new AbortController();
+      /** 현재 API base URL. */
+      const apiBaseUrl = getApiBaseUrl();
 
-      startBrowserDownload(downloadUrl);
+      pollingAbortControllerRef.current = abortController;
+      setDownloadMessage('다운로드 작업을 만들고 있습니다.');
+
+      /** 생성된 다운로드 job. */
+      const job: CreateDownloadJobResponse = await createDownloadJob(validDraft, {
+        apiBaseUrl,
+        signal: abortController.signal,
+      });
+
+      setActiveJob(job);
+      setDownloadMessage(getJobStatusMessage(job));
+
+      /** ready 상태가 된 file endpoint URL. */
+      const fileUrl = await waitForDownloadJobFileUrl(job, {
+        apiBaseUrl,
+        signal: abortController.signal,
+        onStatus: (snapshot) => {
+          setActiveJob(snapshot);
+          setDownloadMessage(getJobStatusMessage(snapshot));
+        },
+      });
+
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      setActiveJob(null);
+      stopPolling();
+      startBrowserDownload(fileUrl);
       setDownloadMessage('브라우저 다운로드를 시작했습니다.');
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
+      setActiveJob(null);
       setDownloadFailed(true);
       setDownloadMessage('다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
+  }
+
+  /** 다운로드 job 취소 click 이벤트를 처리한다. */
+  async function handleCancelDownload() {
+    if (!activeJob) {
+      return;
+    }
+
+    stopPolling();
+
+    try {
+      /** 취소된 다운로드 job 상태. */
+      const canceledJob = await cancelDownloadJob(activeJob, {
+        apiBaseUrl: getApiBaseUrl(),
+      });
+
+      setActiveJob(canceledJob);
+      setDownloadMessage(canceledJob.message ?? '다운로드 작업을 취소했습니다.');
+    } catch {
+      setDownloadFailed(true);
+      setDownloadMessage('다운로드 취소에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
   }
 
@@ -204,9 +316,16 @@ export function App() {
             />
           </label>
 
-          <button className="primary-button" disabled={!canSubmit} type="submit">
-            추출 시작
-          </button>
+          <div className="button-row">
+            <button className="primary-button" disabled={!canSubmit} type="submit">
+              {isJobActive ? '준비 중' : '추출 시작'}
+            </button>
+            {isJobActive ? (
+              <button className="secondary-button" type="button" onClick={handleCancelDownload}>
+                취소
+              </button>
+            ) : null}
+          </div>
         </form>
       </section>
     </main>

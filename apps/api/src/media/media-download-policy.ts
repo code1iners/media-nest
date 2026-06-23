@@ -7,6 +7,8 @@ export type MediaDownloadPolicyConfig = {
   timeoutMs?: number;
   /** 동시 다운로드 생성 제한. 설정하지 않으면 기존 동작처럼 제한하지 않는다. */
   concurrencyLimit?: number;
+  /** job API 대기열 제한. */
+  queueLimit?: number;
 };
 
 /** 환경 변수 기반 다운로드 실행 보호 정책을 제공한다. */
@@ -18,6 +20,7 @@ export class MediaDownloadPolicy {
   getConfig(): MediaDownloadPolicyConfig {
     return {
       concurrencyLimit: this.readPositiveInteger('MEDIA_DOWNLOAD_CONCURRENCY'),
+      queueLimit: this.readPositiveInteger('MEDIA_DOWNLOAD_QUEUE_LIMIT'),
       timeoutMs: this.readPositiveInteger('MEDIA_DOWNLOAD_TIMEOUT_MS'),
     };
   }

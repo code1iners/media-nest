@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   type DownloadDraft,
-  buildDownloadUrl,
+  buildCreateDownloadJobRequest,
+  waitForDownloadJobFileUrl,
   validateDownloadDraft,
 } from '../../src/domain/download-request/download-request';
 
@@ -54,49 +55,88 @@ describe('download request', () => {
     ]);
   });
 
-  it('builds an audio API URL', () => {
-    /** 생성된 다운로드 URL. */
-    const downloadUrl = new URL(
-      buildDownloadUrl(
-        {
-          ...baseDraft,
-          filename: 'clip',
-          quality: '192',
-        },
-        'http://127.0.0.1:3030',
-      ),
+  it('builds an audio download job request', () => {
+    /** 생성된 다운로드 job 요청. */
+    const request = buildCreateDownloadJobRequest(
+      {
+        ...baseDraft,
+        filename: 'clip',
+        quality: '192',
+      },
+      'http://127.0.0.1:3030',
     );
 
-    expect(downloadUrl.origin).toBe('http://127.0.0.1:3030');
-    expect(downloadUrl.pathname).toBe('/audio');
-    expect(downloadUrl.searchParams.get('url')).toBe(baseDraft.sourceUrl);
-    expect(downloadUrl.searchParams.get('filename')).toBe('clip');
-    expect(downloadUrl.searchParams.get('bitrate')).toBe('192');
+    expect(request.url).toBe('http://127.0.0.1:3030/downloads');
+    expect(request.body).toEqual({
+      filename: 'clip',
+      quality: '192',
+      type: 'audio',
+      url: baseDraft.sourceUrl,
+    });
   });
 
-  it('builds a video API URL', () => {
-    /** 생성된 다운로드 URL. */
-    const downloadUrl = new URL(
-      buildDownloadUrl(
-        {
-          ...baseDraft,
-          mode: 'video',
-          quality: '720',
-        },
-        'https://mytube-extract.example',
-      ),
+  it('builds a video download job request', () => {
+    /** 생성된 다운로드 job 요청. */
+    const request = buildCreateDownloadJobRequest(
+      {
+        ...baseDraft,
+        mode: 'video',
+        quality: '720',
+      },
+      'https://mytube-extract.example',
     );
 
-    expect(downloadUrl.pathname).toBe('/video');
-    expect(downloadUrl.searchParams.get('resolution')).toBe('720');
+    expect(request.url).toBe('https://mytube-extract.example/downloads');
+    expect(request.body).toMatchObject({
+      quality: '720',
+      type: 'video',
+    });
   });
 
   it('uses the configured API base URL without dropping its path', () => {
-    /** 생성된 다운로드 URL. */
-    const downloadUrl = new URL(buildDownloadUrl(baseDraft, 'https://mytube-extract.example/api/'));
+    /** 생성된 다운로드 job 요청. */
+    const request = buildCreateDownloadJobRequest(
+      baseDraft,
+      'https://mytube-extract.example/api/',
+    );
 
-    expect(downloadUrl.origin).toBe('https://mytube-extract.example');
-    expect(downloadUrl.pathname).toBe('/api/audio');
+    expect(request.url).toBe('https://mytube-extract.example/api/downloads');
   });
 
+  it('returns a file URL when polling reaches ready status', async () => {
+    /** status 조회 mock fetch. */
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify({
+          createdAt: '2026-06-23T00:00:00.000Z',
+          jobId: 'job-1',
+          status: 'ready',
+          type: 'audio',
+          updatedAt: '2026-06-23T00:00:01.000Z',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        },
+      );
+
+    await expect(
+      waitForDownloadJobFileUrl(
+        {
+          createdAt: '2026-06-23T00:00:00.000Z',
+          fileUrl: '/downloads/job-1/file',
+          jobId: 'job-1',
+          status: 'queued',
+          statusUrl: '/downloads/job-1',
+          type: 'audio',
+          updatedAt: '2026-06-23T00:00:00.000Z',
+        },
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+          intervalMs: 0,
+        },
+      ),
+    ).resolves.toBe('https://mytube-extract.example/api/downloads/job-1/file');
+  });
 });

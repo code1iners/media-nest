@@ -53,6 +53,8 @@ export class MediaDownloadService {
     const filePath = resolve(workDir, encodeURIComponent(job.downloadName));
     /** timeout 설정이 있을 때 downloader를 중단하기 위한 컨트롤러. */
     const abortController = new AbortController();
+    /** job API 취소 신호를 기존 lifecycle의 abort controller로 전달한다. */
+    const abortFromJobSignal = () => abortController.abort();
     /** cleanup 중복 실행을 막는 상태. */
     let cleaned = false;
     /** timeout timer 식별자. */
@@ -68,6 +70,16 @@ export class MediaDownloadService {
     };
 
     try {
+      if (job.signal) {
+        if (job.signal.aborted) {
+          abortController.abort();
+        } else {
+          job.signal.addEventListener('abort', abortFromJobSignal, {
+            once: true,
+          });
+        }
+      }
+
       if (policyConfig.timeoutMs) {
         timeoutHandle = setTimeout(() => {
           abortController.abort();
@@ -101,6 +113,8 @@ export class MediaDownloadService {
       );
       throw new InternalServerErrorException(job.failureMessage);
     } finally {
+      job.signal?.removeEventListener('abort', abortFromJobSignal);
+
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
       }
