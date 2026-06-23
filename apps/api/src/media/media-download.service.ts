@@ -19,6 +19,19 @@ import {
   createSafeErrorLog,
 } from './media-log-redaction';
 
+/** YouTube가 서버 다운로드 요청에 인증 확인을 요구할 때 client에 보여줄 메시지. */
+export const YOUTUBE_AUTH_REQUIRED_FAILURE_MESSAGE =
+  'YouTube 인증 확인이 필요해 다운로드에 실패했습니다.';
+
+/** downloader diagnostic을 가진 에러 후보. */
+type ErrorWithDiagnostic = Error & {
+  /** server-only downloader diagnostic. */
+  diagnostic?: {
+    /** 알려진 downloader 실패 분류. */
+    reason?: string;
+  };
+};
+
 /** 공통 미디어 다운로드 lifecycle을 담당하는 deep module. */
 @Injectable()
 export class MediaDownloadService {
@@ -117,7 +130,9 @@ export class MediaDownloadService {
           error,
         )}${diagnosticLog ? ` ${diagnosticLog}` : ''}`,
       );
-      throw new InternalServerErrorException(job.failureMessage);
+      throw new InternalServerErrorException(
+        getClientFailureMessage(error, job.failureMessage),
+      );
     } finally {
       job.signal?.removeEventListener('abort', abortFromJobSignal);
 
@@ -128,4 +143,17 @@ export class MediaDownloadService {
       this.activeDownloads -= 1;
     }
   }
+}
+
+/** client에 노출해도 되는 실패 메시지만 고른다. */
+function getClientFailureMessage(error: unknown, fallbackMessage: string) {
+  if (
+    error instanceof Error &&
+    (error as ErrorWithDiagnostic).diagnostic?.reason ===
+      'youtube-auth-required'
+  ) {
+    return YOUTUBE_AUTH_REQUIRED_FAILURE_MESSAGE;
+  }
+
+  return fallbackMessage;
 }

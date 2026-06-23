@@ -21,6 +21,7 @@ describe('media log redaction', () => {
       diagnostic: {
         exitCode: 1,
         killed: false,
+        reason: 'youtube-auth-required',
         signal: 'SIGTERM',
         stderrTail:
           'line 1\nERROR: token=secret-value failed at /tmp/private/file.mp3\nline 3',
@@ -33,6 +34,7 @@ describe('media log redaction', () => {
     const log = createSafeDiagnosticLog(error);
 
     expect(log).toContain('tool=yt-dlp');
+    expect(log).toContain('reason=youtube-auth-required');
     expect(log).toContain('exitCode=1');
     expect(log).toContain('stderrTail=');
     expect(log).not.toContain('/tmp/private');

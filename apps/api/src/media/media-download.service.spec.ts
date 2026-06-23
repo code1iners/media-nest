@@ -115,6 +115,25 @@ describe('MediaDownloadService', () => {
     loggerError.mockRestore();
   });
 
+  it('returns a client-safe YouTube auth message for auth-required diagnostics', async () => {
+    /** YouTube bot/auth 감지 diagnostic이 붙은 실패. */
+    const failure = Object.assign(new Error('youtube auth required'), {
+      diagnostic: {
+        reason: 'youtube-auth-required',
+        stderrTail: 'Sign in to confirm you’re not a bot',
+        tool: 'yt-dlp',
+      },
+    });
+
+    downloaderMock.download.mockRejectedValueOnce(failure);
+
+    await expect(service.download(baseJob)).rejects.toMatchObject({
+      response: expect.objectContaining({
+        message: 'YouTube 인증 확인이 필요해 다운로드에 실패했습니다.',
+      }),
+    });
+  });
+
   it('rejects before running the downloader when the concurrency limit is reached', async () => {
     /** 첫 번째 다운로드를 pending 상태로 유지하는 resolver. */
     let resolveFirstDownload: () => void;

@@ -1,4 +1,8 @@
-import { GoneException, NotFoundException } from '@nestjs/common';
+import {
+  GoneException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MediaDownloadJobService } from './media-download-job.service';
 import { MediaDownloadPolicy } from './media-download-policy';
 import { MediaDownloadService } from './media-download.service';
@@ -145,6 +149,24 @@ describe('MediaDownloadJobService', () => {
       status: 'failed',
     });
     expect(service.get(snapshot.jobId).message).not.toContain('/tmp/private');
+  });
+
+  it('keeps the YouTube auth-required failure message in job snapshots', async () => {
+    mediaDownloadServiceMock.download.mockRejectedValueOnce(
+      new InternalServerErrorException(
+        'YouTube 인증 확인이 필요해 다운로드에 실패했습니다.',
+      ),
+    );
+
+    /** 실패할 job. */
+    const snapshot = service.create(baseJob);
+
+    await flushAsync();
+
+    expect(service.get(snapshot.jobId)).toMatchObject({
+      message: 'YouTube 인증 확인이 필요해 다운로드에 실패했습니다.',
+      status: 'failed',
+    });
   });
 
   it('cancels queued jobs without running the downloader', async () => {

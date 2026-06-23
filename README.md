@@ -11,7 +11,7 @@ MyTube Extract는 YouTube 영상 URL 또는 영상 ID를 받아 비디오 파일
 Docker 실행 환경은 `Dockerfile`에서 아래 런타임 의존성을 고정한다.
 
 - Node.js: `node:22.22.3-bookworm-slim`
-- `youtube-dl-exec`: `pnpm-lock.yaml` 기준 `3.0.30`
+- `youtube-dl-exec`: `pnpm-lock.yaml` 기준 `3.1.8`
 - `yt-dlp`: GitHub release `2026.06.09`
 - ffmpeg: Debian bookworm package `7:5.1.8-0+deb12u1`, 실행 경로 `/usr/bin/ffmpeg`
 - Python: Debian bookworm `python3`, `yt-dlp` 실행용
@@ -188,7 +188,7 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 
 - 요청 검증, 다운로드 생성, HTTP 파일 전송은 분리된 경계에서 처리한다.
 - `youtube-dl-exec` 실행은 adapter 뒤에 격리되어 있고, 서비스는 오디오/비디오 포맷 선택만 담당한다.
-- 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 generic 메시지를 사용한다.
+- 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 메시지를 사용한다. YouTube bot/auth 감지 실패는 인증 확인 필요 메시지로 구분한다.
 - `/downloads`는 in-memory FIFO queue를 사용한다. 서버 재시작 후 job 복구는 지원하지 않는다.
 - non-YouTube `http/https` URL 허용은 현재 호환성을 위해 유지한다. YouTube-only source policy는 별도 결정 후 활성화한다.
 

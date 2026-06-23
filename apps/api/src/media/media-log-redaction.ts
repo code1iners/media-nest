@@ -16,6 +16,8 @@ const DIAGNOSTIC_TEXT_LIMIT = 1200;
 type ErrorDiagnostic = {
   /** 진단 대상 도구 이름. */
   tool?: string;
+  /** 알려진 downloader 실패 분류. */
+  reason?: string;
   /** 프로세스 종료 코드. */
   exitCode?: number | null;
   /** 프로세스 종료 signal. */
@@ -59,6 +61,7 @@ export function createSafeDiagnosticLog(error: unknown) {
   /** 로그에 포함할 key=value 조각. */
   const parts = [
     formatDiagnosticPart('tool', diagnostic.tool),
+    formatDiagnosticPart('reason', diagnostic.reason),
     formatDiagnosticPart('exitCode', diagnostic.exitCode),
     formatDiagnosticPart('signal', diagnostic.signal),
     formatDiagnosticPart('killed', diagnostic.killed),

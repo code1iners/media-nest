@@ -35,6 +35,8 @@ const DIAGNOSTIC_TAIL_LINES = 12;
 type DownloaderDiagnostic = {
   /** 진단 대상 도구 이름. */
   tool: 'yt-dlp';
+  /** 알려진 downloader 실패 분류. */
+  reason?: 'youtube-auth-required';
   /** 프로세스 종료 코드. */
   exitCode?: number | null;
   /** 프로세스 종료 signal. */
@@ -129,6 +131,7 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
           reject(
             attachDiagnostic(error, {
               killed: downloadProcess.killed,
+              reason: detectDiagnosticReason(stderrTail()),
               stderrTail: stderrTail(),
               stdoutTail: stdoutTail(),
               tool: 'yt-dlp',
@@ -142,6 +145,7 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
           reject(
             attachDiagnostic(error, {
               killed: downloadProcess.killed,
+              reason: detectDiagnosticReason(stderrTail()),
               stderrTail: stderrTail(),
               stdoutTail: stdoutTail(),
               tool: 'yt-dlp',
@@ -161,6 +165,7 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
             attachDiagnostic(new Error(`youtube-dl exited with code ${code}`), {
               exitCode: code,
               killed: downloadProcess.killed,
+              reason: detectDiagnosticReason(stderrTail()),
               signal,
               stderrTail: stderrTail(),
               stdoutTail: stdoutTail(),
@@ -190,6 +195,18 @@ function createStreamTail(stream: Readable | undefined) {
   });
 
   return () => lines.join('\n');
+}
+
+/** stderr에서 알려진 YouTube 인증 실패를 분류한다. */
+function detectDiagnosticReason(stderrTail: string) {
+  if (
+    stderrTail.includes('Sign in to confirm you') ||
+    stderrTail.includes('LOGIN_REQUIRED')
+  ) {
+    return 'youtube-auth-required' as const;
+  }
+
+  return undefined;
 }
 
 /** Error에 client와 분리된 server-only diagnostic을 붙인다. */

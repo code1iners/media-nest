@@ -53,7 +53,7 @@
     "@nestjs/platform-express": "^11.1.27",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
-    "youtube-dl-exec": "3.0.30"
+    "youtube-dl-exec": "3.1.8"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.23",

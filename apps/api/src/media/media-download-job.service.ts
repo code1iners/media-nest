@@ -9,7 +9,10 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MediaDownloadPolicy } from './media-download-policy';
-import { MediaDownloadService } from './media-download.service';
+import {
+  MediaDownloadService,
+  YOUTUBE_AUTH_REQUIRED_FAILURE_MESSAGE,
+} from './media-download.service';
 import {
   DownloadJobRecord,
   DownloadJobSnapshot,
@@ -246,7 +249,7 @@ export class MediaDownloadJobService {
           error,
         )}`,
       );
-      this.mark(job, 'failed', '다운로드 작업에 실패했습니다.');
+      this.mark(job, 'failed', getJobFailureMessage(error));
     } finally {
       this.runningCount -= 1;
       this.scheduleDrain();
@@ -297,4 +300,23 @@ export class MediaDownloadJobService {
       updatedAt: new Date(job.updatedAt).toISOString(),
     };
   }
+}
+
+/** client에 노출해도 되는 job 실패 메시지를 고른다. */
+function getJobFailureMessage(error: unknown) {
+  if (error instanceof HttpException) {
+    /** Nest HTTP exception response body. */
+    const response = error.getResponse();
+    /** response object가 담은 client message. */
+    const message =
+      typeof response === 'object' && response && 'message' in response
+        ? response.message
+        : undefined;
+
+    if (message === YOUTUBE_AUTH_REQUIRED_FAILURE_MESSAGE) {
+      return YOUTUBE_AUTH_REQUIRED_FAILURE_MESSAGE;
+    }
+  }
+
+  return '다운로드 작업에 실패했습니다.';
 }

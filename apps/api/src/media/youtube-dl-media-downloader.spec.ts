@@ -148,6 +148,26 @@ describe('YoutubeDlMediaDownloader', () => {
     });
   });
 
+  it('classifies YouTube auth required diagnostics from stderr', async () => {
+    const promise = downloader.download({
+      format: 'bestaudio/best',
+      kind: 'audio',
+      outputPath: '/tmp/sample.mp3',
+      sourceUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
+    });
+
+    downloadProcess.stderr.write(
+      'ERROR: [youtube] abc123_DEF0: Sign in to confirm you’re not a bot.\n',
+    );
+    downloadProcess.emit('close', 1);
+
+    await expect(promise).rejects.toMatchObject({
+      diagnostic: expect.objectContaining({
+        reason: 'youtube-auth-required',
+      }),
+    });
+  });
+
   it('kills the process when the abort signal fires', async () => {
     const abortController = new AbortController();
     const promise = downloader.download({
