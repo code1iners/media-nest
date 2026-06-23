@@ -1,14 +1,14 @@
-# Media Nest Chrome Extension 현재 구현 PRD
+# MyTube Extract Chrome Extension 현재 구현 PRD
 
 ## Problem Statement
 
-Media Nest API 서버는 URL 또는 YouTube 영상 ID를 기반으로 오디오와 비디오 파일 다운로드 응답을 제공한다. Chrome 확장 프로그램은 사용자가 어떤 페이지에 있든 popup을 열고 YouTube URL을 직접 입력하거나 현재 탭 URL을 가져와 추출을 시작할 수 있게 한다.
+MyTube Extract API 서버는 URL 또는 YouTube 영상 ID를 기반으로 오디오와 비디오 파일 다운로드 응답을 제공한다. Chrome 확장 프로그램은 사용자가 어떤 페이지에 있든 popup을 열고 YouTube URL을 직접 입력하거나 현재 탭 URL을 가져와 추출을 시작할 수 있게 한다.
 
 사용자는 API 경로와 query string을 직접 조합하지 않고도, 가진 YouTube URL 또는 현재 열어둔 YouTube 탭으로 오디오 또는 비디오 다운로드를 시작할 수 있어야 한다.
 
 ## Solution
 
-Chrome 확장 프로그램 popup은 WXT + React + TypeScript로 구현되어 있다. Popup은 사용자가 입력하거나 현재 탭에서 가져온 YouTube URL, 추출 형식, 선택 옵션을 조합해 환경 변수로 정한 Media Nest API로 다운로드를 시작한다.
+Chrome 확장 프로그램 popup은 WXT + React + TypeScript로 구현되어 있다. Popup은 사용자가 입력하거나 현재 탭에서 가져온 YouTube URL, 추출 형식, 선택 옵션을 조합해 환경 변수로 정한 MyTube Extract API로 다운로드를 시작한다.
 
 API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/current-implementation-fsd.md`를 기준으로 소비하며, 이번 범위에서는 서버 엔드포인트나 응답 계약을 변경하지 않는다.
 
@@ -30,13 +30,13 @@ API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/curre
 - Chrome 확장 프로그램 문서는 `docs/chrome-extension`이 소유하고, API 서버 문서는 `docs/api`가 소유한다.
 - 확장 프로그램은 URL 직접 입력을 기본 흐름으로 유지하고, 현재 탭 URL 가져오기 버튼을 보조 흐름으로 제공한다.
 - WXT는 extension entrypoint와 generated manifest를 소유하고, React는 popup UI rendering만 담당한다.
-- Chrome storage/downloads API, Media Nest API URL 생성, popup 상태 전이는 React component 밖의 TypeScript module로 분리한다.
-- 현재 Media Nest API 계약을 그대로 사용한다. 오디오는 `/audio?url={MEDIA_URL}`, 비디오는 `/video?url={MEDIA_URL}`을 호출한다.
-- API base URL은 `WXT_MEDIA_NEST_API_BASE_URL` 환경 변수로 정하고 사용자 입력 UI를 제공하지 않는다. 운영 값은 `https://media-nest.codeliners.cc`, 로컬 값은 `http://127.0.0.1:3030`만 사용한다.
+- Chrome storage/downloads API, MyTube Extract API URL 생성, popup 상태 전이는 React component 밖의 TypeScript module로 분리한다.
+- 현재 MyTube Extract API 계약을 그대로 사용한다. 오디오는 `/audio?url={MEDIA_URL}`, 비디오는 `/video?url={MEDIA_URL}`을 호출한다.
+- API base URL은 `WXT_MYTUBE_EXTRACT_API_BASE_URL` 환경 변수로 정하고 사용자 입력 UI를 제공하지 않는다. 운영 값은 `https://media-nest.codeliners.cc`, 로컬 값은 `http://127.0.0.1:3030`만 사용한다. 기존 `WXT_MEDIA_NEST_API_BASE_URL`은 배포 전환 기간의 fallback으로만 지원한다.
 - 파일명, 오디오 비트레이트, 비디오 해상도는 선택 옵션으로 유지한다.
 - 입력한 원본 URL은 기본적으로 Chrome storage에 저장하지 않는다.
 - `activeTab` 권한은 사용자가 popup에서 현재 탭 URL 가져오기 버튼을 누를 때만 사용한다.
-- 현재 서버 CORS는 전체 허용 상태이므로 MVP 문서에서는 이를 전제로 한다. `EXTENSION_ID` 기반 allowlist 강제는 별도 후속 범위로 둔다.
+- 현재 서버 CORS는 no-origin 요청과 운영 web origin, local 개발 origin만 허용한다. 고정 extension ID 기반 `chrome-extension://...` origin 허용은 별도 후속 범위로 둔다.
 - Chrome Web Store 배포, 계정, 다운로드 이력, 작업 큐, 진행률 조회는 이번 문서 범위에 포함하지 않는다.
 
 ## Testing Decisions
@@ -55,12 +55,12 @@ API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/curre
 
 ## Out of Scope
 
-- Media Nest API 서버 엔드포인트 변경
+- MyTube Extract API 서버 엔드포인트 변경
 - API 서버 인증, 사용자 계정, 권한 관리
 - 다운로드 작업 큐와 진행률 조회
 - 다운로드 이력 저장
 - Chrome Web Store 배포 자동화
-- `EXTENSION_ID` 기반 CORS allowlist 강제
+- 고정 extension ID 기반 CORS 허용
 - YouTube-only source policy 서버 강제
 - 입력 URL 저장 또는 최근 URL 목록
 - shared package 도입

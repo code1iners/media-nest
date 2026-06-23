@@ -4,7 +4,7 @@ import {
   normalizeApiBaseUrl,
   normalizeSourceUrl,
 } from '../../src/domain/download-options/download-options';
-import { buildDownloadUrl, buildHealthUrl } from '../../src/services/media-nest/download-url';
+import { buildDownloadUrl, buildHealthUrl } from '../../src/services/mytube-extract/download-url';
 import { resolveDefaultApiBaseUrl } from '../../src/shared/constants';
 
 describe('download URL behavior', () => {

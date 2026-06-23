@@ -8,7 +8,7 @@ import {
 /** 다운로드 URL 생성 option. */
 export type BuildDownloadUrlOptions = DownloadOptions;
 
-/** 선택된 모드와 옵션을 Media Nest 다운로드 URL로 변환한다. */
+/** 선택된 모드와 옵션을 MyTube Extract 다운로드 URL로 변환한다. */
 export function buildDownloadUrl(options: BuildDownloadUrlOptions): string {
   assertDownloadMode(options.mode);
 
@@ -30,7 +30,7 @@ export function buildDownloadUrl(options: BuildDownloadUrlOptions): string {
     appendOptionalQuery(searchParams, 'resolution', options.resolution);
   }
 
-  /** Media Nest URL endpoint 기반 다운로드 URL. */
+  /** MyTube Extract URL endpoint 기반 다운로드 URL. */
   return `${apiBaseUrl}/${options.mode}?${searchParams.toString()}`;
 }
 

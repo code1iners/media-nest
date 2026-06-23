@@ -11,7 +11,7 @@ const manifestPath = path.join(outputRoot, 'manifest.json');
 const missingReferences = [];
 /** 검증 실패 목록. */
 const validationErrors = [];
-/** 기본 운영 Media Nest API 서버 주소. */
+/** 기본 운영 MyTube Extract API 서버 주소. */
 const DEFAULT_API_BASE_URL = 'https://media-nest.codeliners.cc';
 
 /** 존재해야 하는 파일 참조를 확인한다. */
@@ -35,6 +35,8 @@ function assertIncludes(values, expectedValue, ownerPath) {
 function createExpectedApiHostPermission() {
   /** 검증 대상 API 서버 주소. */
   const apiBaseUrl =
+    process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL ??
+    process.env.MYTUBE_EXTRACT_API_BASE_URL ??
     process.env.WXT_MEDIA_NEST_API_BASE_URL ??
     process.env.MEDIA_NEST_API_BASE_URL ??
     DEFAULT_API_BASE_URL;

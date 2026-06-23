@@ -17,8 +17,11 @@ import {
   createInvalidSourceUrlStatus,
   createReadyStatus,
 } from '../../domain/popup-state/popup-state';
-import { buildDownloadUrl } from '../../services/media-nest/download-url';
-import { type MediaNestClient, createMediaNestClient } from '../../services/media-nest/media-nest-client';
+import { buildDownloadUrl } from '../../services/mytube-extract/download-url';
+import {
+  type MyTubeExtractClient,
+  createMyTubeExtractClient,
+} from '../../services/mytube-extract/mytube-extract-client';
 
 /** Popup model dependency. */
 export type PopupDownloadModelDependencies = {
@@ -28,8 +31,8 @@ export type PopupDownloadModelDependencies = {
   downloads: DownloadsAdapter;
   /** Tabs adapter. */
   tabs: TabsAdapter;
-  /** Media Nest API client. */
-  mediaNestClient: MediaNestClient;
+  /** MyTube Extract API client. */
+  myTubeExtractClient: MyTubeExtractClient;
 };
 
 /** Popup 화면 snapshot. */
@@ -77,7 +80,7 @@ export function createChromePopupDownloadModel(): PopupDownloadModel {
     storage: createStorageAdapter(),
     downloads: createDownloadsAdapter(),
     tabs: createTabsAdapter(),
-    mediaNestClient: createMediaNestClient(),
+    myTubeExtractClient: createMyTubeExtractClient(),
   });
 }
 
@@ -204,7 +207,7 @@ export function createPopupDownloadModel(
       });
 
       try {
-        await dependencies.mediaNestClient.assertServerAvailable(
+        await dependencies.myTubeExtractClient.assertServerAvailable(
           submittedSnapshot.options.apiBaseUrl,
         );
 

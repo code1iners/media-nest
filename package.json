@@ -1,8 +1,8 @@
 {
-  "name": "media-nest",
+  "name": "mytube-extract",
   "version": "0.1.0",
   "private": true,
-  "description": "Media Nest monorepo workspace.",
+  "description": "MyTube Extract monorepo workspace.",
   "license": "UNLICENSED",
   "author": "",
   "packageManager": "pnpm@11.0.8",

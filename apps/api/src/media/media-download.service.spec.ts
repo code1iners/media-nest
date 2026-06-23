@@ -72,7 +72,7 @@ describe('MediaDownloadService', () => {
 
   it('cleans the work directory and returns a generic failure when downloader fails', async () => {
     downloaderMock.download.mockRejectedValueOnce(
-      new Error('/tmp/media-nest-secret/upstream stderr'),
+      new Error('/tmp/mytube-extract-secret/upstream stderr'),
     );
 
     await expect(service.download(baseJob)).rejects.toBeInstanceOf(

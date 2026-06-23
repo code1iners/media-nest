@@ -5,7 +5,7 @@ export type DownloadMode = 'audio' | 'video';
 
 /** Popup form에서 관리하는 다운로드 옵션. */
 export type DownloadOptions = {
-  /** 고정 Media Nest API base URL. */
+  /** 고정 MyTube Extract API base URL. */
   apiBaseUrl: string;
   /** 오디오 bitrate option. */
   bitrate: string;

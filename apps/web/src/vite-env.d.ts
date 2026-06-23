@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Media Nest API base URL. */
+  /** MyTube Extract API base URL. */
+  readonly VITE_MYTUBE_EXTRACT_API_BASE_URL?: string;
+  /** 이전 Media Nest API base URL fallback. */
   readonly VITE_MEDIA_NEST_API_BASE_URL?: string;
 }
 

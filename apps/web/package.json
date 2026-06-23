@@ -2,7 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
-  "description": "Media Nest Vite CSR PWA.",
+  "description": "MyTube Extract Vite CSR web app.",
   "scripts": {
     "build": "tsc --noEmit && vite build && node tools/verify-pwa-package.js",
     "dev": "vite --host 0.0.0.0",

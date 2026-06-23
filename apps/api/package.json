@@ -2,7 +2,7 @@
   "name": "api",
   "version": "0.1.0",
   "private": true,
-  "description": "Media Nest NestJS API server.",
+  "description": "MyTube Extract NestJS API server.",
   "license": "UNLICENSED",
   "author": "",
   "main": "dist/main.js",

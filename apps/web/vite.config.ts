@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-/** Vite CSR/PWA app configuration. */
+/** Vite CSR web app configuration. */
 export default defineConfig({
   plugins: [react()],
   server: {

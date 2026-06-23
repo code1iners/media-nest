@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from '../../src/shared/constants';
 
 /** Dev preview option storage key. */
-const DEV_PREVIEW_STORAGE_KEY = 'media-nest-dev-preview-options';
+const DEV_PREVIEW_STORAGE_KEY = 'mytube-extract-dev-preview-options';
 
 /** Dev preview chrome API 설치 option. */
 type InstallDevPreviewChromeApiOptions = {

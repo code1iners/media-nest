@@ -15,6 +15,23 @@ type TestableWxtConfig = {
 };
 
 describe('WXT config', () => {
+  it('prefers the MyTube Extract API env var for host permissions', () => {
+    /** 테스트 전 API env var. */
+    const previousApiBaseUrl = process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL;
+
+    process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL = 'http://127.0.0.1:3030';
+
+    try {
+      expect(createApiHostPermission()).toBe('http://127.0.0.1:3030/*');
+    } finally {
+      if (previousApiBaseUrl === undefined) {
+        delete process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL;
+      } else {
+        process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL = previousApiBaseUrl;
+      }
+    }
+  });
+
   it('keeps the React module and extension permissions required by the popup flow', () => {
     /** 테스트 가능한 WXT config. */
     const testableConfig = config as TestableWxtConfig;

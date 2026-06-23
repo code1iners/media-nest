@@ -10,7 +10,7 @@
     "postinstall": "wxt prepare",
     "test": "vitest run",
     "test:browser": "wxt build && node tools/verify-extension-package.js && node tests/browser/popup-smoke.mjs",
-    "test:browser:dev": "MEDIA_NEST_POPUP_SMOKE_MODE=dev node tests/browser/popup-smoke.mjs",
+    "test:browser:dev": "MYTUBE_EXTRACT_POPUP_SMOKE_MODE=dev node tests/browser/popup-smoke.mjs",
     "zip": "wxt zip"
   },
   "dependencies": {

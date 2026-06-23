@@ -1,23 +1,26 @@
-/** 운영 Media Nest API 서버 주소. */
+/** 운영 MyTube Extract API 서버 주소. */
 export const PRODUCTION_API_BASE_URL = 'https://media-nest.codeliners.cc';
 
-/** 로컬 Media Nest API 서버 주소. */
+/** 로컬 MyTube Extract API 서버 주소. */
 export const LOCAL_API_BASE_URL = 'http://127.0.0.1:3030';
 
-/** WXT runtime에서 노출하는 Media Nest import.meta shape. */
-type MediaNestImportMeta = ImportMeta & {
+/** WXT runtime에서 노출하는 MyTube Extract import.meta shape. */
+type MyTubeExtractImportMeta = ImportMeta & {
   /** WXT/Vite 환경 변수 map. */
   readonly env: {
-    /** 환경별 Media Nest API 서버 주소. */
+    /** 환경별 MyTube Extract API 서버 주소. */
+    readonly WXT_MYTUBE_EXTRACT_API_BASE_URL?: string;
+    /** 이전 Media Nest API 서버 주소 fallback. */
     readonly WXT_MEDIA_NEST_API_BASE_URL?: string;
   };
 };
 
 /** WXT build/dev 환경에서 주입된 API 서버 주소. */
-const configuredApiBaseUrl = (import.meta as MediaNestImportMeta).env
-  .WXT_MEDIA_NEST_API_BASE_URL;
+const configuredApiBaseUrl =
+  (import.meta as MyTubeExtractImportMeta).env.WXT_MYTUBE_EXTRACT_API_BASE_URL ??
+  (import.meta as MyTubeExtractImportMeta).env.WXT_MEDIA_NEST_API_BASE_URL;
 
-/** 기본 Media Nest API 서버 주소. */
+/** 기본 MyTube Extract API 서버 주소. */
 export const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl(configuredApiBaseUrl);
 
 /** Chrome storage에 저장하는 popup option key 목록. */

@@ -1,9 +1,9 @@
 services:
-  media-nest:
+  mytube-extract:
     build:
       context: .
-    image: media-nest:latest
-    container_name: media-nest
+    image: mytube-extract:latest
+    container_name: mytube-extract
     restart: unless-stopped
     env_file:
       - .env.production

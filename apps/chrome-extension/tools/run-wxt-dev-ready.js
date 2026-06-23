@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 
-/** 기본 local Media Nest API base URL. */
+/** 기본 local MyTube Extract API base URL. */
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3030';
 /** 기본 WXT dev server port. */
 const DEFAULT_WXT_DEV_PORT = '3001';
@@ -27,23 +27,39 @@ if (require.main === module) {
 function runWxtDev() {
   /** local API base URL. */
   const apiBaseUrl =
+    process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL ??
+    process.env.MYTUBE_EXTRACT_API_BASE_URL ??
     process.env.WXT_MEDIA_NEST_API_BASE_URL ??
     process.env.MEDIA_NEST_API_BASE_URL ??
     DEFAULT_API_BASE_URL;
   /** WXT dev output root. */
   const outputRoot = path.resolve(
-    process.env.MEDIA_NEST_WXT_DEV_OUTPUT_ROOT ?? DEFAULT_DEV_OUTPUT_ROOT,
+    process.env.MYTUBE_EXTRACT_WXT_DEV_OUTPUT_ROOT ??
+      process.env.MEDIA_NEST_WXT_DEV_OUTPUT_ROOT ??
+      DEFAULT_DEV_OUTPUT_ROOT,
   );
   /** readiness timeout. */
-  const timeoutMs = Number(process.env.MEDIA_NEST_DEV_READY_TIMEOUT_MS ?? DEFAULT_READY_TIMEOUT_MS);
+  const timeoutMs = Number(
+    process.env.MYTUBE_EXTRACT_DEV_READY_TIMEOUT_MS ??
+      process.env.MEDIA_NEST_DEV_READY_TIMEOUT_MS ??
+      DEFAULT_READY_TIMEOUT_MS,
+  );
   /** readiness polling interval. */
   const intervalMs = Number(
+    process.env.MYTUBE_EXTRACT_DEV_READY_INTERVAL_MS ??
     process.env.MEDIA_NEST_DEV_READY_INTERVAL_MS ?? DEFAULT_READY_INTERVAL_MS,
   );
   /** WXT dev server port. */
-  const devServerPort = process.env.MEDIA_NEST_WXT_DEV_PORT ?? DEFAULT_WXT_DEV_PORT;
+  const devServerPort =
+    process.env.MYTUBE_EXTRACT_WXT_DEV_PORT ??
+    process.env.MEDIA_NEST_WXT_DEV_PORT ??
+    DEFAULT_WXT_DEV_PORT;
   /** Popup preview server port. */
-  const previewPort = Number(process.env.MEDIA_NEST_PREVIEW_PORT ?? DEFAULT_PREVIEW_PORT);
+  const previewPort = Number(
+    process.env.MYTUBE_EXTRACT_PREVIEW_PORT ??
+      process.env.MEDIA_NEST_PREVIEW_PORT ??
+      DEFAULT_PREVIEW_PORT,
+  );
   /** WXT process argument 목록. */
   const wxtArgs = createWxtDevArgs(process.argv.slice(2), devServerPort);
   /** wrapper 시작 timestamp. */
@@ -87,16 +103,16 @@ function runWxtDev() {
     .catch((error) => {
       if (error.code === 'EADDRINUSE') {
         console.error(
-          '[media-nest-dev] Popup preview server port is already in use. Set MEDIA_NEST_PREVIEW_PORT to another port.',
+          '[mytube-extract-dev] Popup preview server port is already in use. Set MYTUBE_EXTRACT_PREVIEW_PORT to another port.',
         );
         return;
       }
 
-      console.error(`[media-nest-dev] Readiness probe failed: ${error.message}`);
+      console.error(`[mytube-extract-dev] Readiness probe failed: ${error.message}`);
     });
 
   wxtProcess.on('error', (error) => {
-    console.error(`[media-nest-dev] Failed to start WXT dev process: ${error.message}`);
+    console.error(`[mytube-extract-dev] Failed to start WXT dev process: ${error.message}`);
     process.exit(1);
   });
 
@@ -114,6 +130,7 @@ function runWxtDev() {
 function createWxtDevEnv(env, apiBaseUrl) {
   return {
     ...env,
+    WXT_MYTUBE_EXTRACT_API_BASE_URL: apiBaseUrl,
     WXT_MEDIA_NEST_API_BASE_URL: apiBaseUrl,
   };
 }
@@ -175,7 +192,7 @@ function isFreshManifest(manifestPath, startedAtMs, fileStats) {
   }
 }
 
-/** Media Nest API health endpoint를 확인한다. */
+/** MyTube Extract API health endpoint를 확인한다. */
 async function probeApiHealth(apiBaseUrl, fetchImpl) {
   /** health request abort controller. */
   const abortController = new AbortController();
@@ -279,12 +296,12 @@ function getContentType(filePath) {
 /** `pnpm dev`에서 보여줄 readiness 성공 메시지를 만든다. */
 function createDevReadySuccessMessage({ apiBaseUrl, outputRoot, previewUrl }) {
   return [
-    '[media-nest-dev] Media Nest dev is ready.',
-    `[media-nest-dev] API health: ${apiBaseUrl}/health`,
-    `[media-nest-dev] WXT dev output: ${outputRoot}`,
-    `[media-nest-dev] Opening popup preview: ${previewUrl}`,
-    '[media-nest-dev] You can also test the real extension popup from the Chromium window opened by WXT.',
-    '[media-nest-dev] Supported input for this MVP: https://www.youtube.com/watch?v=<11-char-id>',
+    '[mytube-extract-dev] MyTube Extract dev is ready.',
+    `[mytube-extract-dev] API health: ${apiBaseUrl}/health`,
+    `[mytube-extract-dev] WXT dev output: ${outputRoot}`,
+    `[mytube-extract-dev] Opening popup preview: ${previewUrl}`,
+    '[mytube-extract-dev] You can also test the real extension popup from the Chromium window opened by WXT.',
+    '[mytube-extract-dev] Supported input for this MVP: https://www.youtube.com/watch?v=<11-char-id>',
   ].join('\n');
 }
 
@@ -292,23 +309,23 @@ function createDevReadySuccessMessage({ apiBaseUrl, outputRoot, previewUrl }) {
 function createDevReadyFailureMessage({ apiBaseUrl, outputRoot, result }) {
   /** readiness failure message lines. */
   const lines = [
-    '[media-nest-dev] Dev process is still running, but readiness was not confirmed.',
+    '[mytube-extract-dev] Dev process is still running, but readiness was not confirmed.',
   ];
 
   if (!result.apiReady) {
     lines.push(
-      `[media-nest-dev] API health check failed: ${apiBaseUrl}/health`,
-      `[media-nest-dev] API detail: ${result.apiError?.message ?? 'unknown error'}`,
+      `[mytube-extract-dev] API health check failed: ${apiBaseUrl}/health`,
+      `[mytube-extract-dev] API detail: ${result.apiError?.message ?? 'unknown error'}`,
     );
   }
 
   if (!result.manifestReady) {
     lines.push(
-      `[media-nest-dev] WXT dev manifest was not found: ${path.join(outputRoot, 'manifest.json')}`,
+      `[mytube-extract-dev] WXT dev manifest was not found: ${path.join(outputRoot, 'manifest.json')}`,
     );
   }
 
-  lines.push('[media-nest-dev] Check the WXT and API logs above, then reload the extension popup.');
+  lines.push('[mytube-extract-dev] Check the WXT and API logs above, then reload the extension popup.');
 
   return lines.join('\n');
 }
@@ -342,7 +359,11 @@ function createDevPreviewUrl({
 
 /** OS 기본 브라우저로 dev preview를 연다. */
 function openDevPreview(previewUrl) {
-  if (process.env.MEDIA_NEST_DEV_OPEN_PREVIEW === '0') {
+  const shouldSkipOpen =
+    process.env.MYTUBE_EXTRACT_DEV_OPEN_PREVIEW ??
+    process.env.MEDIA_NEST_DEV_OPEN_PREVIEW;
+
+  if (shouldSkipOpen === '0') {
     return;
   }
 
@@ -358,8 +379,8 @@ function openDevPreview(previewUrl) {
   });
 
   openerProcess.on('error', (error) => {
-    console.error(`[media-nest-dev] Could not open popup preview automatically: ${error.message}`);
-    console.error(`[media-nest-dev] Open manually: ${previewUrl}`);
+    console.error(`[mytube-extract-dev] Could not open popup preview automatically: ${error.message}`);
+    console.error(`[mytube-extract-dev] Open manually: ${previewUrl}`);
   });
   openerProcess.unref();
 }

@@ -6,16 +6,13 @@ import {
   INITIAL_DOWNLOAD_DRAFT,
   buildDownloadUrl,
   downloadDraftSchema,
-  resolveDownloadFilename,
   validateDownloadDraft,
 } from '../domain/download-request/download-request';
 
-/** Media Nest Vite CSR PWA. */
+/** MyTube Extract Vite CSR web app. */
 export function App() {
   // States.
 
-  /** 다운로드 요청 진행 여부. */
-  const [isDownloading, setIsDownloading] = useState(false);
   /** 다운로드 요청 결과 메시지. */
   const [downloadMessage, setDownloadMessage] = useState('');
   /** 다운로드 요청 실패 여부. */
@@ -43,17 +40,30 @@ export function App() {
   /** 현재 입력 검증 결과. */
   const validation = validateDownloadDraft(draft);
   /** 다운로드 실행 가능 여부. */
-  const canSubmit = validation.kind === 'ready' && isValid && !isDownloading;
+  const canSubmit = validation.kind === 'ready' && isValid;
   /** 품질 입력 라벨. */
   const qualityLabel = draft.mode === 'audio' ? '최대 비트레이트' : '최대 해상도';
   /** 품질 입력 placeholder. */
   const qualityPlaceholder = draft.mode === 'audio' ? '192' : '720';
   /** 사용자에게 표시할 현재 상태 메시지. */
-  const statusMessage = isDownloading
-    ? '다운로드 파일을 준비하고 있습니다.'
-    : downloadMessage || validation.message;
+  const statusMessage = downloadMessage || validation.message;
   /** 현재 상태 메시지의 시각적 상태. */
-  const statusKind = downloadFailed ? 'invalid' : validation.kind;
+  const statusTone =
+    downloadFailed || validation.kind === 'invalid'
+      ? 'danger'
+      : validation.kind === 'ready'
+        ? 'success'
+        : 'warning';
+  /** 현재 상태를 짧게 보여주는 브랜드식 label. */
+  const statusLabel = downloadFailed
+    ? 'ERROR'
+    : downloadMessage
+      ? 'LOOT'
+      : validation.kind === 'ready'
+        ? 'READY'
+        : validation.kind === 'invalid'
+          ? 'CHECK'
+          : 'INPUT';
 
   // Functions.
 
@@ -63,17 +73,15 @@ export function App() {
     setDownloadFailed(false);
   }
 
-  /** Blob 응답을 브라우저 다운로드로 전달한다. */
-  function saveBlob(blob: Blob, filename: string) {
-    /** 브라우저가 다운로드할 임시 object URL. */
-    const objectUrl = URL.createObjectURL(blob);
+  /** API attachment URL을 브라우저 다운로드 매니저로 넘긴다. */
+  function startBrowserDownload(downloadUrl: string) {
     /** 다운로드를 시작하기 위한 임시 anchor. */
     const downloadLink = document.createElement('a');
 
-    downloadLink.href = objectUrl;
-    downloadLink.download = filename;
+    downloadLink.href = downloadUrl;
+    downloadLink.rel = 'noopener';
+    downloadLink.target = '_blank';
     downloadLink.click();
-    URL.revokeObjectURL(objectUrl);
   }
 
   // Handlers.
@@ -88,57 +96,58 @@ export function App() {
   }
 
   /** 다운로드 실행 submit 이벤트를 처리한다. */
-  async function handleDownloadSubmit(validDraft: DownloadDraft) {
-    /** Media Nest API 다운로드 URL. */
-    const downloadUrl = buildDownloadUrl(
-      validDraft,
-      import.meta.env.VITE_MEDIA_NEST_API_BASE_URL,
-    );
-
-    setIsDownloading(true);
+  function handleDownloadSubmit(validDraft: DownloadDraft) {
     clearDownloadResult();
 
     try {
-      /** Media Nest API attachment 응답. */
-      const response = await fetch(downloadUrl);
-
-      if (!response.ok) {
-        throw new Error('다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.');
-      }
-
-      /** 브라우저 저장에 사용할 API 응답 파일명. */
-      const filename = resolveDownloadFilename(
+      /** MyTube Extract API 다운로드 URL. */
+      const downloadUrl = buildDownloadUrl(
         validDraft,
-        response.headers.get('Content-Disposition'),
+        import.meta.env.VITE_MYTUBE_EXTRACT_API_BASE_URL ??
+          import.meta.env.VITE_MEDIA_NEST_API_BASE_URL,
       );
-      /** 브라우저에서 저장할 media blob. */
-      const blob = await response.blob();
 
-      saveBlob(blob, filename);
-      setDownloadMessage(`${filename} 다운로드를 시작했습니다.`);
-    } catch (error) {
+      startBrowserDownload(downloadUrl);
+      setDownloadMessage('브라우저 다운로드를 시작했습니다.');
+    } catch {
       setDownloadFailed(true);
-      setDownloadMessage(
-        error instanceof Error
-          ? error.message
-          : '다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.',
-      );
-    } finally {
-      setIsDownloading(false);
+      setDownloadMessage('다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.');
     }
   }
 
   return (
     <main className="app-shell">
       <section className="workspace" aria-labelledby="page-title">
-        <header className="page-header">
-          <h1 id="page-title">Media Nest</h1>
-          <p>원본 URL과 옵션을 입력해 Media Nest API 다운로드를 시작합니다.</p>
+        <header className="loot-banner">
+          <div className="brand-lockup">
+            <p className="brand-kicker">16-bit media extractor</p>
+            <h1 id="page-title" className="page-title">
+              MyTube Extract
+            </h1>
+            <p className="hero-copy">이 영상은 이제 제 겁니다</p>
+          </div>
+          <div className="pixel-extractor" aria-hidden="true">
+            <span className="pixel pixel--arm" />
+            <span className="pixel pixel--claw" />
+            <span className="pixel pixel--capsule" />
+          </div>
         </header>
+
+        <p className="policy-strip">저작권 및 플랫폼 정책을 준수해 사용하세요.</p>
+
+        <section className={`status-card status-card--${statusTone}`} aria-labelledby="status-title">
+          <p id="status-title" className="status-label">
+            {statusLabel}
+          </p>
+          <p className="status-text" role="status">
+            {statusMessage}
+          </p>
+        </section>
 
         <form className="download-form" onSubmit={handleSubmit(handleDownloadSubmit)}>
           <label className="field field--wide">
-            <span>원본 URL</span>
+            <span className="field-label">추출 URL</span>
+            <span className="field-description">YouTube watch, Shorts, youtu.be URL을 붙여넣으세요.</span>
             <input
               autoComplete="off"
               placeholder="https://www.youtube.com/watch?v=..."
@@ -148,7 +157,7 @@ export function App() {
           </label>
 
           <fieldset className="mode-group">
-            <legend>다운로드 형식</legend>
+            <legend>추출 형식</legend>
             <label className={draft.mode === 'audio' ? 'mode-option is-selected' : 'mode-option'}>
               <input
                 checked={draft.mode === 'audio'}
@@ -156,7 +165,8 @@ export function App() {
                 value="audio"
                 {...register('mode', { onChange: handleModeChange })}
               />
-              <span>오디오</span>
+              <span aria-hidden="true">♪</span>
+              오디오
             </label>
             <label className={draft.mode === 'video' ? 'mode-option is-selected' : 'mode-option'}>
               <input
@@ -165,12 +175,14 @@ export function App() {
                 value="video"
                 {...register('mode', { onChange: handleModeChange })}
               />
-              <span>비디오</span>
+              <span aria-hidden="true">▣</span>
+              비디오
             </label>
           </fieldset>
 
           <label className="field">
-            <span>파일명</span>
+            <span className="field-label">파일명</span>
+            <span className="field-description">비워두면 서버 기본값을 사용합니다.</span>
             <input
               autoComplete="off"
               placeholder="선택 입력"
@@ -180,7 +192,8 @@ export function App() {
           </label>
 
           <label className="field">
-            <span>{qualityLabel}</span>
+            <span className="field-label">{qualityLabel}</span>
+            <span className="field-description">비워두면 서버가 기본 품질을 고릅니다.</span>
             <input
               inputMode="numeric"
               min={1}
@@ -191,12 +204,8 @@ export function App() {
             />
           </label>
 
-          <p className={`status-text status-text--${statusKind}`} role="status">
-            {statusMessage}
-          </p>
-
           <button className="primary-button" disabled={!canSubmit} type="submit">
-            {isDownloading ? '다운로드 준비 중' : '다운로드 시작'}
+            추출 시작
           </button>
         </form>
       </section>

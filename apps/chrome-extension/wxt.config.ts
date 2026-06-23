@@ -1,11 +1,13 @@
 import { defineConfig } from 'wxt';
 
-/** 운영 Media Nest API 서버 주소. */
+/** 운영 MyTube Extract API 서버 주소. */
 const PRODUCTION_API_BASE_URL = 'https://media-nest.codeliners.cc';
 
 /** 환경 변수 기반 API host permission을 만든다. */
 export function createApiHostPermission(
-  apiBaseUrl = process.env.WXT_MEDIA_NEST_API_BASE_URL ??
+  apiBaseUrl = process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL ??
+    process.env.MYTUBE_EXTRACT_API_BASE_URL ??
+    process.env.WXT_MEDIA_NEST_API_BASE_URL ??
     process.env.MEDIA_NEST_API_BASE_URL ??
     PRODUCTION_API_BASE_URL,
 ) {

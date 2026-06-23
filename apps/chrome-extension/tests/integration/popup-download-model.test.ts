@@ -25,7 +25,7 @@ function createDependencies(
     tabs: {
       getCurrentTabUrl: vi.fn().mockResolvedValue('https://youtu.be/abc123_DEF0'),
     },
-    mediaNestClient: {
+    myTubeExtractClient: {
       assertServerAvailable: vi.fn().mockResolvedValue(undefined),
     },
     ...overrides,
@@ -172,7 +172,7 @@ describe('popup download model', () => {
     await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
     await model.submitDownload();
 
-    expect(dependencies.mediaNestClient.assertServerAvailable).toHaveBeenCalledWith(
+    expect(dependencies.myTubeExtractClient.assertServerAvailable).toHaveBeenCalledWith(
       'https://media-nest.codeliners.cc',
     );
     expect(dependencies.downloads.startDownload).toHaveBeenCalledWith(
@@ -185,7 +185,7 @@ describe('popup download model', () => {
     let releaseServerCheck: () => void = () => {};
     /** Popup model dependency. */
     const dependencies = createDependencies({
-      mediaNestClient: {
+      myTubeExtractClient: {
         assertServerAvailable: vi.fn(
           () =>
             new Promise<void>((resolve) => {
@@ -208,7 +208,7 @@ describe('popup download model', () => {
     releaseServerCheck();
     await Promise.all([firstSubmit, secondSubmit]);
 
-    expect(dependencies.mediaNestClient.assertServerAvailable).toHaveBeenCalledTimes(1);
+    expect(dependencies.myTubeExtractClient.assertServerAvailable).toHaveBeenCalledTimes(1);
     expect(dependencies.downloads.startDownload).toHaveBeenCalledTimes(1);
     expect(dependencies.downloads.startDownload).toHaveBeenCalledWith(
       'https://media-nest.codeliners.cc/audio?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123_DEF0',
@@ -224,7 +224,7 @@ describe('popup download model', () => {
     let releaseServerCheck: () => void = () => {};
     /** Popup model dependency. */
     const dependencies = createDependencies({
-      mediaNestClient: {
+      myTubeExtractClient: {
         assertServerAvailable: vi.fn(
           () =>
             new Promise<void>((resolve) => {
@@ -256,7 +256,7 @@ describe('popup download model', () => {
   it('shows server unavailable state when health check fails', async () => {
     /** Popup model dependency. */
     const dependencies = createDependencies({
-      mediaNestClient: {
+      myTubeExtractClient: {
         assertServerAvailable: vi.fn().mockRejectedValue(new Error('Server is unavailable.')),
       },
     });

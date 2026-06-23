@@ -15,7 +15,7 @@ const {
 describe('WXT dev readiness', () => {
   it('reports ready when the local API and WXT dev manifest are available', async () => {
     /** 테스트용 WXT dev output root. */
-    const outputRoot = path.join(os.tmpdir(), 'media-nest-dev-ready');
+    const outputRoot = path.join(os.tmpdir(), 'mytube-extract-dev-ready');
     /** Readiness probe 결과. */
     const result = await probeDevReadiness({
       apiBaseUrl: 'http://127.0.0.1:3030',
@@ -38,7 +38,7 @@ describe('WXT dev readiness', () => {
 
   it('keeps API and manifest failures distinguishable', async () => {
     /** 테스트용 WXT dev output root. */
-    const outputRoot = path.join(os.tmpdir(), 'media-nest-dev-missing');
+    const outputRoot = path.join(os.tmpdir(), 'mytube-extract-dev-missing');
     /** Readiness probe 결과. */
     const result = await probeDevReadiness({
       apiBaseUrl: 'http://127.0.0.1:3030',
@@ -59,7 +59,7 @@ describe('WXT dev readiness', () => {
 
   it('does not treat a stale WXT manifest as dev-ready', async () => {
     /** 테스트용 WXT dev output root. */
-    const outputRoot = path.join(os.tmpdir(), 'media-nest-dev-stale');
+    const outputRoot = path.join(os.tmpdir(), 'mytube-extract-dev-stale');
     /** stale manifest path. */
     const manifestPath = path.join(outputRoot, 'manifest.json');
     /** Readiness probe 결과. */
@@ -88,7 +88,7 @@ describe('WXT dev readiness', () => {
 
   it('keeps probing when manifest stats cannot be read yet', async () => {
     /** 테스트용 WXT dev output root. */
-    const outputRoot = path.join(os.tmpdir(), 'media-nest-dev-stat-race');
+    const outputRoot = path.join(os.tmpdir(), 'mytube-extract-dev-stat-race');
     /** Readiness probe 결과. */
     const result = await probeDevReadiness({
       apiBaseUrl: 'http://127.0.0.1:3030',
@@ -115,7 +115,7 @@ describe('WXT dev readiness', () => {
 
   it('prints actionable success and failure messages for pnpm dev', () => {
     /** 테스트용 WXT dev output root. */
-    const outputRoot = path.join(os.tmpdir(), 'media-nest-dev-message');
+    const outputRoot = path.join(os.tmpdir(), 'mytube-extract-dev-message');
 
     expect(
       createDevReadySuccessMessage({
@@ -123,7 +123,7 @@ describe('WXT dev readiness', () => {
         outputRoot,
         previewUrl: 'http://localhost:3000/popup.html',
       }),
-    ).toContain('Media Nest dev is ready');
+    ).toContain('MyTube Extract dev is ready');
 
     expect(
       createDevReadyFailureMessage({
@@ -153,12 +153,13 @@ describe('WXT dev readiness', () => {
     expect(
       createWxtDevEnv(
         {
-          MEDIA_NEST_API_BASE_URL: 'http://127.0.0.1:3030',
+          MYTUBE_EXTRACT_API_BASE_URL: 'http://127.0.0.1:3030',
         },
         'http://127.0.0.1:3030',
       ),
     ).toMatchObject({
-      MEDIA_NEST_API_BASE_URL: 'http://127.0.0.1:3030',
+      MYTUBE_EXTRACT_API_BASE_URL: 'http://127.0.0.1:3030',
+      WXT_MYTUBE_EXTRACT_API_BASE_URL: 'http://127.0.0.1:3030',
       WXT_MEDIA_NEST_API_BASE_URL: 'http://127.0.0.1:3030',
     });
   });

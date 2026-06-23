@@ -5,21 +5,28 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 /** Browser smoke 실행 mode. */
-const smokeMode = process.env.MEDIA_NEST_POPUP_SMOKE_MODE ?? 'production';
+const smokeMode =
+  process.env.MYTUBE_EXTRACT_POPUP_SMOKE_MODE ??
+  process.env.MEDIA_NEST_POPUP_SMOKE_MODE ??
+  'production';
 /** Dev smoke 여부. */
 const isDevSmoke = smokeMode === 'dev';
 /** Browser smoke mode별 기본 WXT output root. */
 const defaultExtensionOutputRoot = isDevSmoke ? '.output/chrome-mv3-dev' : '.output/chrome-mv3';
 /** WXT output root. */
 const extensionOutputRoot = path.resolve(
-  process.env.MEDIA_NEST_EXTENSION_OUTPUT_ROOT ?? defaultExtensionOutputRoot,
+  process.env.MYTUBE_EXTRACT_EXTENSION_OUTPUT_ROOT ??
+    process.env.MEDIA_NEST_EXTENSION_OUTPUT_ROOT ??
+    defaultExtensionOutputRoot,
 );
-/** 실제 Media Nest API base URL. */
+/** 실제 MyTube Extract API base URL. */
 const realApiBaseUrl =
+  process.env.WXT_MYTUBE_EXTRACT_API_BASE_URL ??
+  process.env.MYTUBE_EXTRACT_API_BASE_URL ??
   process.env.WXT_MEDIA_NEST_API_BASE_URL ??
   process.env.MEDIA_NEST_API_BASE_URL ??
   'https://media-nest.codeliners.cc';
-/** Built popup에 주입되는 Media Nest API origin. */
+/** Built popup에 주입되는 MyTube Extract API origin. */
 const expectedApiOrigin = new URL(realApiBaseUrl).origin;
 
 if (!['production', 'dev'].includes(smokeMode)) {
@@ -86,7 +93,7 @@ const staticServer = await createStaticServer(extensionOutputRoot);
   await staticServer.close();
 }
 
-/** 실제 Media Nest API health endpoint를 확인한다. */
+/** 실제 MyTube Extract API health endpoint를 확인한다. */
 async function assertRealApiHealth(apiBaseUrl) {
   /** health check abort controller. */
   const abortController = new AbortController();
@@ -100,14 +107,14 @@ async function assertRealApiHealth(apiBaseUrl) {
     });
 
     if (!response.ok) {
-      throw new Error(`Media Nest API health responded with ${response.status}`);
+      throw new Error(`MyTube Extract API health responded with ${response.status}`);
     }
 
     /** 실제 API health payload. */
     const payload = await response.json();
 
     if (payload?.ok !== true) {
-      throw new Error('Media Nest API health payload did not contain ok=true');
+      throw new Error('MyTube Extract API health payload did not contain ok=true');
     }
   } finally {
     clearTimeout(timeout);
@@ -117,7 +124,7 @@ async function assertRealApiHealth(apiBaseUrl) {
 /** WXT build output을 load unpacked로 올린 실제 extension popup 렌더링을 확인한다. */
 async function verifyLoadUnpackedPopup(outputRoot) {
   /** Chromium user data dir. */
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'media-nest-extension-'));
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mytube-extract-extension-'));
 
   await launchAndCloseExtensionContext(userDataDir, outputRoot);
 
@@ -135,6 +142,7 @@ async function verifyLoadUnpackedPopup(outputRoot) {
       waitUntil: 'domcontentloaded',
     });
     await popupPage.getByRole('heading', { name: 'MyTube Extract' }).waitFor({ timeout: 10000 });
+    await popupPage.getByText('이 영상은 이제 제 겁니다').waitFor({ timeout: 10000 });
   } finally {
     await closeBrowserContext(context);
   }
@@ -220,7 +228,7 @@ async function verifyServerUnavailableFlow(origin) {
   const requests = [];
 
   try {
-    await routeMediaNestApi(page, {
+    await routeMyTubeExtractApi(page, {
       requests,
       healthOk: false,
     });
@@ -237,7 +245,7 @@ async function verifyServerUnavailableFlow(origin) {
     await expectStatusText(page, 'Server is unavailable.');
 
     /** Fake Chrome downloads API가 요청한 URL. */
-    const downloadUrl = await page.evaluate(() => globalThis.__mediaNestDownloadUrl);
+    const downloadUrl = await page.evaluate(() => globalThis.__myTubeExtractDownloadUrl);
 
     if (downloadUrl !== null) {
       throw new Error(`Expected no download URL, got ${downloadUrl}`);
@@ -259,7 +267,7 @@ async function verifyDownloadFlow(origin) {
   const requests = [];
 
   try {
-    await routeMediaNestApi(page, {
+    await routeMyTubeExtractApi(page, {
       requests,
       healthOk: true,
     });
@@ -280,7 +288,7 @@ async function verifyDownloadFlow(origin) {
     await expectStatusText(page, '추출 요청을 시작했습니다.');
 
     /** Fake Chrome downloads API가 요청한 URL. */
-    const downloadUrl = await page.evaluate(() => globalThis.__mediaNestDownloadUrl);
+    const downloadUrl = await page.evaluate(() => globalThis.__myTubeExtractDownloadUrl);
 
     if (
       downloadUrl !==
@@ -296,7 +304,7 @@ async function verifyDownloadFlow(origin) {
 }
 
 /** Production API 요청을 browser smoke 안에서 fake 응답으로 처리한다. */
-async function routeMediaNestApi(page, { requests, healthOk }) {
+async function routeMyTubeExtractApi(page, { requests, healthOk }) {
   await page.route(`${expectedApiOrigin}/**`, async (route) => {
     /** 가로챈 production API 요청 URL. */
     const requestUrl = new URL(route.request().url());
@@ -341,9 +349,9 @@ async function routeMediaNestApi(page, { requests, healthOk }) {
 /** Page에 extension popup용 fake Chrome API를 주입한다. */
 async function installFakeChromeApi(page, options) {
   await page.addInitScript((chromeOptions) => {
-    globalThis.__mediaNestStoredOptions = chromeOptions.storedOptions;
-    globalThis.__mediaNestDownloadUrl = null;
-    globalThis.__mediaNestCurrentTabUrl =
+    globalThis.__myTubeExtractStoredOptions = chromeOptions.storedOptions;
+    globalThis.__myTubeExtractDownloadUrl = null;
+    globalThis.__myTubeExtractCurrentTabUrl =
       chromeOptions.currentTabUrl ?? 'https://www.youtube.com/watch?v=abc123_DEF0';
     globalThis.chrome = {
       runtime: {
@@ -352,17 +360,17 @@ async function installFakeChromeApi(page, options) {
       storage: {
         local: {
           get(_keys, callback) {
-            callback(globalThis.__mediaNestStoredOptions);
+            callback(globalThis.__myTubeExtractStoredOptions);
           },
           set(items, callback) {
-            globalThis.__mediaNestStoredOptions = items;
+            globalThis.__myTubeExtractStoredOptions = items;
             callback();
           },
         },
       },
       downloads: {
         async download(downloadOptions, callback) {
-          globalThis.__mediaNestDownloadUrl = downloadOptions.url;
+          globalThis.__myTubeExtractDownloadUrl = downloadOptions.url;
           await fetch(downloadOptions.url);
           callback(1);
         },
@@ -373,7 +381,7 @@ async function installFakeChromeApi(page, options) {
             {
               active: true,
               id: 1,
-              url: globalThis.__mediaNestCurrentTabUrl,
+              url: globalThis.__myTubeExtractCurrentTabUrl,
             },
           ]);
         },
@@ -393,7 +401,7 @@ async function readLoadedExtensionId(userDataDir, outputRoot) {
       const preferences = JSON.parse(fs.readFileSync(securePreferencesPath, 'utf8'));
       /** Extension settings. */
       const settings = preferences.extensions?.settings ?? {};
-      /** Media Nest extension entry. */
+      /** MyTube Extract extension entry. */
       const extensionEntry = Object.entries(settings).find(
         ([, value]) => value.path === outputRoot,
       );

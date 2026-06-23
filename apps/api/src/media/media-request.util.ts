@@ -24,7 +24,7 @@ const BLOCKED_FILENAME_PATTERN = /[\/\\\0\r\n]/;
 
 /** 요청 단위 임시 작업 디렉터리를 생성한다. */
 export function createMediaWorkDir() {
-  return mkdtempSync(join(tmpdir(), 'media-nest-'));
+  return mkdtempSync(join(tmpdir(), 'mytube-extract-'));
 }
 
 /** 요청 단위 임시 작업 디렉터리만 정리한다. */
