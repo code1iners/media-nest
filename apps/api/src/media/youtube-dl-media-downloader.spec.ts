@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter } from 'events';
 import { existsSync } from 'fs';
+import { PassThrough } from 'stream';
 import { exec as youtubeExec } from 'youtube-dl-exec';
 import { YoutubeDlMediaDownloader } from './youtube-dl-media-downloader';
 
@@ -15,7 +16,16 @@ jest.mock('youtube-dl-exec', () => ({
 
 describe('YoutubeDlMediaDownloader', () => {
   let downloader: YoutubeDlMediaDownloader;
-  let downloadProcess: EventEmitter & { kill: jest.Mock; catch?: jest.Mock };
+  let downloadProcess: EventEmitter & {
+    /** 테스트에서 주입하는 child process 종료 함수. */
+    kill: jest.Mock;
+    /** youtube-dl-exec promise rejection hook. */
+    catch?: jest.Mock;
+    /** 테스트 stdout stream. */
+    stdout: PassThrough;
+    /** 테스트 stderr stream. */
+    stderr: PassThrough;
+  };
 
   const youtubeExecMock = jest.mocked(youtubeExec);
   const existsSyncMock = jest.mocked(existsSync);
@@ -26,6 +36,8 @@ describe('YoutubeDlMediaDownloader', () => {
 
     downloadProcess = Object.assign(new EventEmitter(), {
       kill: jest.fn(),
+      stderr: new PassThrough(),
+      stdout: new PassThrough(),
     });
     youtubeExecMock.mockReturnValue(downloadProcess as never);
 
@@ -111,6 +123,29 @@ describe('YoutubeDlMediaDownloader', () => {
     downloadProcess.emit('close', 1);
 
     await expect(promise).rejects.toThrow('upstream failed');
+  });
+
+  it('keeps server-only diagnostics when yt-dlp exits with stderr', async () => {
+    const promise = downloader.download({
+      format: 'bestaudio/best',
+      kind: 'audio',
+      outputPath: '/tmp/sample.mp3',
+      sourceUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
+    });
+
+    downloadProcess.stderr.write('first warning\n');
+    downloadProcess.stderr.write('ERROR: ffmpeg failed /tmp/private-token\n');
+    downloadProcess.stdout.write('download-id-123\n');
+    downloadProcess.emit('close', 1, 'SIGTERM');
+
+    await expect(promise).rejects.toMatchObject({
+      diagnostic: expect.objectContaining({
+        exitCode: 1,
+        signal: 'SIGTERM',
+        stderrTail: expect.stringContaining('ffmpeg failed'),
+        stdoutTail: expect.stringContaining('download-id-123'),
+      }),
+    });
   });
 
   it('kills the process when the abort signal fires', async () => {

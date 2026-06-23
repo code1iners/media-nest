@@ -1,4 +1,8 @@
-import { HttpException, InternalServerErrorException } from '@nestjs/common';
+import {
+  HttpException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { existsSync } from 'fs';
 import { MediaDownloadPolicy } from './media-download-policy';
@@ -78,6 +82,37 @@ describe('MediaDownloadService', () => {
     await expect(service.download(baseJob)).rejects.toBeInstanceOf(
       InternalServerErrorException,
     );
+  });
+
+  it('logs server-only downloader diagnostics without changing the client failure', async () => {
+    /** Nest logger error spy. */
+    const loggerError = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    /** downloader diagnostic이 붙은 실패. */
+    const failure = Object.assign(new Error('/tmp/private/raw stderr'), {
+      diagnostic: {
+        exitCode: 1,
+        stderrTail: 'ERROR: token=secret-value failed at /tmp/private/file.mp3',
+        tool: 'yt-dlp',
+      },
+    });
+
+    downloaderMock.download.mockRejectedValueOnce(failure);
+
+    await expect(service.download(baseJob)).rejects.toBeInstanceOf(
+      InternalServerErrorException,
+    );
+
+    /** 실제 server log 문자열. */
+    const logMessage = String(loggerError.mock.calls[0]?.[0] ?? '');
+
+    expect(logMessage).toContain('tool=yt-dlp');
+    expect(logMessage).toContain('exitCode=1');
+    expect(logMessage).not.toContain('/tmp/private');
+    expect(logMessage).not.toContain('secret-value');
+
+    loggerError.mockRestore();
   });
 
   it('rejects before running the downloader when the concurrency limit is reached', async () => {

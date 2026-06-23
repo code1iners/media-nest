@@ -14,7 +14,10 @@ import {
   MediaDownloadJob,
 } from './media-download.types';
 import { MEDIA_DOWNLOADER, MediaDownloader } from './media-downloader.port';
-import { createSafeErrorLog } from './media-log-redaction';
+import {
+  createSafeDiagnosticLog,
+  createSafeErrorLog,
+} from './media-log-redaction';
 
 /** 공통 미디어 다운로드 lifecycle을 담당하는 deep module. */
 @Injectable()
@@ -106,10 +109,13 @@ export class MediaDownloadService {
       };
     } catch (error) {
       cleanup();
+      /** server-only downloader diagnostic 로그. */
+      const diagnosticLog = createSafeDiagnosticLog(error);
+
       this.logger.error(
         `Media download failed: ${job.kind} ${job.source.safeLabel} ${createSafeErrorLog(
           error,
-        )}`,
+        )}${diagnosticLog ? ` ${diagnosticLog}` : ''}`,
       );
       throw new InternalServerErrorException(job.failureMessage);
     } finally {

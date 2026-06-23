@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { existsSync } from 'fs';
+import type { Readable } from 'stream';
 import { exec as youtubeExec } from 'youtube-dl-exec';
 import { MediaDownloaderOptions } from './media-download-options';
 import { MediaDownloader } from './media-downloader.port';
@@ -8,11 +9,42 @@ import { MediaDownloader } from './media-downloader.port';
 /** youtube-dl-exec child process 중 필요한 이벤트/제어 표면. */
 type YoutubeDlProcess = {
   /** child process 이벤트 리스너. */
-  on: (event: 'error' | 'close', listener: (...args: never[]) => void) => void;
+  on: {
+    (event: 'error', listener: (error: Error) => void): void;
+    (
+      event: 'close',
+      listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+    ): void;
+  };
   /** youtube-dl-exec promise rejection을 처리한다. */
   catch?: (listener: (error: Error) => void) => void;
   /** abort 시 가능한 경우 child process를 종료한다. */
   kill?: () => void;
+  /** process kill 여부. */
+  killed?: boolean;
+  /** stdout stream. */
+  stdout?: Readable;
+  /** stderr stream. */
+  stderr?: Readable;
+};
+
+/** yt-dlp 실패 원인 확인에 남길 stream tail line 수. */
+const DIAGNOSTIC_TAIL_LINES = 12;
+
+/** Error에 붙이는 server-only downloader 진단 정보. */
+type DownloaderDiagnostic = {
+  /** 진단 대상 도구 이름. */
+  tool: 'yt-dlp';
+  /** 프로세스 종료 코드. */
+  exitCode?: number | null;
+  /** 프로세스 종료 signal. */
+  signal?: NodeJS.Signals | null;
+  /** 프로세스 kill 여부. */
+  killed?: boolean;
+  /** stdout 마지막 일부. */
+  stdoutTail?: string;
+  /** stderr 마지막 일부. */
+  stderrTail?: string;
 };
 
 /** youtube-dl-exec를 media downloader port 뒤에 격리하는 adapter. */
@@ -61,7 +93,17 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
       const abortDownload = () => {
         settle(() => {
           downloadProcess.kill?.();
-          reject(new Error('Media download timed out or was aborted'));
+          reject(
+            attachDiagnostic(
+              new Error('Media download timed out or was aborted'),
+              {
+                killed: downloadProcess.killed,
+                stderrTail: stderrTail(),
+                stdoutTail: stdoutTail(),
+                tool: 'yt-dlp',
+              },
+            ),
+          );
         });
       };
 
@@ -70,6 +112,10 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
         options.sourceUrl,
         youtubeOptions,
       ) as unknown as YoutubeDlProcess;
+      /** stdout 마지막 줄 수집기. */
+      const stdoutTail = createStreamTail(downloadProcess.stdout);
+      /** stderr 마지막 줄 수집기. */
+      const stderrTail = createStreamTail(downloadProcess.stderr);
 
       if (options.signal?.aborted) {
         abortDownload();
@@ -80,26 +126,73 @@ export class YoutubeDlMediaDownloader implements MediaDownloader {
 
       downloadProcess.catch?.((error: Error) => {
         settle(() => {
-          reject(error);
+          reject(
+            attachDiagnostic(error, {
+              killed: downloadProcess.killed,
+              stderrTail: stderrTail(),
+              stdoutTail: stdoutTail(),
+              tool: 'yt-dlp',
+            }),
+          );
         });
       });
 
       downloadProcess.on('error', (error: Error) => {
         settle(() => {
-          reject(error);
+          reject(
+            attachDiagnostic(error, {
+              killed: downloadProcess.killed,
+              stderrTail: stderrTail(),
+              stdoutTail: stdoutTail(),
+              tool: 'yt-dlp',
+            }),
+          );
         });
       });
 
-      downloadProcess.on('close', (code: number) => {
+      downloadProcess.on('close', (code, signal) => {
         settle(() => {
           if (code === 0) {
             resolve();
             return;
           }
 
-          reject(new Error(`youtube-dl exited with code ${code}`));
+          reject(
+            attachDiagnostic(new Error(`youtube-dl exited with code ${code}`), {
+              exitCode: code,
+              killed: downloadProcess.killed,
+              signal,
+              stderrTail: stderrTail(),
+              stdoutTail: stdoutTail(),
+              tool: 'yt-dlp',
+            }),
+          );
         });
       });
     });
   }
+}
+
+/** stream 마지막 일부를 line 단위로 보관한다. */
+function createStreamTail(stream: Readable | undefined) {
+  /** 지금까지 받은 마지막 line 목록. */
+  const lines: string[] = [];
+
+  stream?.on('data', (chunk: Buffer | string) => {
+    /** stream chunk를 문자열 line으로 변환한다. */
+    const chunkLines = String(chunk).split(/\r?\n/).filter(Boolean);
+
+    lines.push(...chunkLines);
+
+    if (lines.length > DIAGNOSTIC_TAIL_LINES) {
+      lines.splice(0, lines.length - DIAGNOSTIC_TAIL_LINES);
+    }
+  });
+
+  return () => lines.join('\n');
+}
+
+/** Error에 client와 분리된 server-only diagnostic을 붙인다. */
+function attachDiagnostic(error: Error, diagnostic: DownloaderDiagnostic) {
+  return Object.assign(error, { diagnostic });
 }
