@@ -42,7 +42,7 @@ cp apps/chrome-extension/.env.example apps/chrome-extension/.env
 - `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: R2 S3 compatible storage 설정
 - `R2_PUBLIC_BASE_URL`: S3 API read fallback에 사용할 public object base URL
 - `ASSET_RETENTION_DAYS`: 추출 asset 보관 기간. 기본값은 `7`
-- `WORKER_LOOP_INTERVAL_MS`: worker idle polling 간격. 기본값은 `60000`
+- `WORKER_LOOP_INTERVAL_MS`: worker idle polling 간격. 기본값은 `5000`
 - `WORKER_PROCESSING_TIMEOUT_MS`: stuck processing job을 queued로 복구하는 기준. 기본값은 `3600000`
 - `MEDIA_DOWNLOAD_TIMEOUT_MS`: 다운로드 생성 타임아웃. 비워두면 기존처럼 제한하지 않음
 - `MEDIA_DOWNLOAD_CONCURRENCY`: 동시 다운로드 생성 제한. 비워두면 기존처럼 제한하지 않음

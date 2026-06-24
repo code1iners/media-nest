@@ -22,7 +22,7 @@ import {
 /** worker idle polling 간격. */
 const LOOP_INTERVAL_MS = parseEnvNumber(
   process.env.WORKER_LOOP_INTERVAL_MS,
-  60_000,
+  5_000,
 );
 
 /** processing stuck 복구 기준. */
