@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import {
   AUDIO_QUALITY_OPTIONS,
   type DownloadDraft,
+  type DownloadDisplayStatus,
   type DownloadResponse,
   INITIAL_DOWNLOAD_DRAFT,
   VIDEO_QUALITY_OPTIONS,
@@ -14,13 +15,55 @@ import {
   validateDownloadDraft,
   waitForDownloadJob,
 } from '../domain/download-request/download-request';
+import { PixelExtractorArt, PixelIcon, type PixelIconName } from './pixel-art';
 
 /** 상태 표시 메타데이터. */
 const STATUS_ITEMS = [
-  { key: 'queued', label: '대기' },
-  { key: 'processing', label: '처리' },
-  { key: 'completed', label: '완료' },
-  { key: 'expired', label: '만료' },
+  { icon: 'queued', key: 'queued', label: '대기' },
+  { icon: 'processing', key: 'processing', label: '처리' },
+  { icon: 'completed', key: 'completed', label: '완료' },
+  { icon: 'expired', key: 'expired', label: '만료' },
+] as const satisfies Array<{
+  /** 상태 아이콘 이름. */
+  icon: PixelIconName;
+  /** 표시 상태 key. */
+  key: DownloadDisplayStatus;
+  /** 탭 라벨. */
+  label: string;
+}>;
+
+/** 하단 상태 안내 메타데이터. */
+const STATUS_LEGEND_ITEMS = [
+  {
+    description: '요청 접수',
+    icon: 'queued',
+    key: 'queued',
+    label: '대기',
+  },
+  {
+    description: '파일 추출 중',
+    icon: 'processing',
+    key: 'processing',
+    label: '처리',
+  },
+  {
+    description: '다운로드 가능',
+    icon: 'completed',
+    key: 'completed',
+    label: '완료',
+  },
+  {
+    description: '재시도 필요',
+    icon: 'failed',
+    key: 'failed',
+    label: '실패',
+  },
+  {
+    description: '재추출 필요',
+    icon: 'expired',
+    key: 'expired',
+    label: '만료',
+  },
 ] as const;
 
 /** MyTube Extract Vite CSR web app. */
@@ -80,6 +123,10 @@ export function App() {
   const statusMessage = requestError || statusJob.message || validation.message;
   /** 요청 시작 시각 표시값. */
   const createdTime = formatTime(statusJob.createdAt);
+  /** 현재 상태 아이콘 이름. */
+  const statusIconName = getStatusIconName(statusJob.displayStatus);
+  /** 현재 진행률 표시 문구. */
+  const progressLabel = createProgressLabel(statusJob);
 
   // Functions.
 
@@ -181,16 +228,17 @@ export function App() {
             </p>
           </div>
           <div className="pixel-extractor" aria-hidden="true">
-            <span className="extractor-rope" />
-            <span className="extractor-claw" />
-            <span className="extractor-screen" />
+            <PixelExtractorArt />
           </div>
         </header>
 
         <div className="console-grid">
           <section className="console-panel" aria-labelledby="request-title">
             <div className="panel-title-row">
-              <h2 id="request-title">추출 요청</h2>
+              <h2 id="request-title">
+                <PixelIcon name="download" />
+                추출 요청
+              </h2>
               <span className="title-dots" aria-hidden="true" />
             </div>
 
@@ -200,12 +248,15 @@ export function App() {
             >
               <label className="field field--wide">
                 <span className="field-label">YouTube URL</span>
-                <input
-                  autoComplete="off"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  type="url"
-                  {...register('sourceUrl', { onChange: clearRequestError })}
-                />
+                <span className="url-input-frame">
+                  <PixelIcon className="input-icon" name="link" />
+                  <input
+                    autoComplete="off"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    type="url"
+                    {...register('sourceUrl', { onChange: clearRequestError })}
+                  />
+                </span>
               </label>
 
               <fieldset className="segmented-control">
@@ -221,7 +272,7 @@ export function App() {
                     value="audio"
                     {...register('mode', { onChange: handleModeChange })}
                   />
-                  <span aria-hidden="true">♪</span>
+                  <PixelIcon name="audio" />
                   오디오 (MP3)
                 </label>
                 <label
@@ -235,7 +286,7 @@ export function App() {
                     value="video"
                     {...register('mode', { onChange: handleModeChange })}
                   />
-                  <span aria-hidden="true">▣</span>
+                  <PixelIcon name="video" />
                   비디오 (MP4)
                 </label>
               </fieldset>
@@ -266,12 +317,15 @@ export function App() {
                 disabled={!canSubmit}
                 type="submit"
               >
+                <PixelIcon name="download" />
                 {submitting ? '요청 중' : '추출 요청'}
               </button>
             </form>
 
             <div className="notice-box" role="note">
-              <span aria-hidden="true">i</span>
+              <span aria-hidden="true">
+                <PixelIcon name="info" />
+              </span>
               <p>즉시 다운로드가 아니라 작업 요청 방식입니다.</p>
               <p>파일은 준비 후 일정 시간 뒤 삭제될 수 있습니다.</p>
             </div>
@@ -282,7 +336,10 @@ export function App() {
             aria-labelledby="status-title"
           >
             <div className="panel-title-row panel-title-row--mint">
-              <h2 id="status-title">작업 현황</h2>
+              <h2 id="status-title">
+                <PixelIcon name="processing" />
+                작업 현황
+              </h2>
               <span className="title-dots" aria-hidden="true" />
             </div>
 
@@ -290,7 +347,7 @@ export function App() {
               className={`status-head status-head--${statusJob.displayStatus}`}
             >
               <span className="status-icon" aria-hidden="true">
-                ■
+                <PixelIcon name={statusIconName} />
               </span>
               <div>
                 <h3>{statusTitle}</h3>
@@ -308,12 +365,16 @@ export function App() {
                   }
                   key={item.key}
                 >
+                  <PixelIcon name={item.icon} />
                   {item.label}
                 </span>
               ))}
             </div>
 
-            <div className="progress-meter" aria-label="진행률">
+            <div
+              className={`progress-meter progress-meter--${statusJob.displayStatus}`}
+              aria-label="진행률"
+            >
               {Array.from({ length: 10 }).map((_, index) => (
                 <span
                   className={index < filledProgressCells ? 'is-filled' : ''}
@@ -321,9 +382,7 @@ export function App() {
                 />
               ))}
             </div>
-            <p className="progress-label">
-              {statusJob.progress === null ? '--' : `${statusJob.progress}%`}
-            </p>
+            <p className="progress-label">{progressLabel}</p>
 
             <dl className="status-details">
               <div>
@@ -350,6 +409,7 @@ export function App() {
                 download={createDownloadFileName(statusJob)}
                 href={buildApiUrl(statusJob.downloadUrl, getApiBaseUrl())}
               >
+                <PixelIcon name="download" />
                 다운로드
               </a>
             ) : null}
@@ -357,11 +417,17 @@ export function App() {
         </div>
 
         <section className="legend-bar" aria-label="상태 안내">
-          <span>상태 안내</span>
-          <p>대기: 요청 접수</p>
-          <p>처리: 파일 추출 중</p>
-          <p>완료: 다운로드 가능</p>
-          <p>실패/만료: 재요청 필요</p>
+          <span className="legend-title">상태 안내</span>
+          {STATUS_LEGEND_ITEMS.map((item) => (
+            <article
+              className={`legend-item legend-item--${item.key}`}
+              key={item.key}
+            >
+              <PixelIcon name={item.icon} />
+              <strong>{item.label}</strong>
+              <p>{item.description}</p>
+            </article>
+          ))}
         </section>
       </section>
     </main>
@@ -404,6 +470,40 @@ function createStatusTitle(job: DownloadResponse) {
   }
 
   return '보관 기간이 지났습니다';
+}
+
+/** 표시 상태에 맞는 픽셀 아이콘 이름을 반환한다. */
+function getStatusIconName(status: DownloadDisplayStatus): PixelIconName {
+  if (status === 'completed') {
+    return 'completed';
+  }
+
+  if (status === 'failed') {
+    return 'failed';
+  }
+
+  if (status === 'expired') {
+    return 'expired';
+  }
+
+  if (status === 'processing') {
+    return 'processing';
+  }
+
+  return 'queued';
+}
+
+/** 진행률 상태 문구를 만든다. */
+function createProgressLabel(job: DownloadResponse) {
+  if (job.progress === null) {
+    return '--';
+  }
+
+  if (job.displayStatus === 'queued') {
+    return '대기 중';
+  }
+
+  return `${job.progress}%`;
 }
 
 /** 요청 시각을 HH:mm 형식으로 표시한다. */
