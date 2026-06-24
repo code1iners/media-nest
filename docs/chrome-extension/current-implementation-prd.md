@@ -32,7 +32,7 @@ API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/curre
 - WXT는 extension entrypoint와 generated manifest를 소유하고, React는 popup UI rendering만 담당한다.
 - Chrome storage/downloads API, MyTube Extract API URL 생성, popup 상태 전이는 React component 밖의 TypeScript module로 분리한다.
 - 현재 MyTube Extract API 계약을 그대로 사용한다. 오디오는 `/audio?url={MEDIA_URL}`, 비디오는 `/video?url={MEDIA_URL}`을 호출한다.
-- API base URL은 `WXT_MYTUBE_EXTRACT_API_BASE_URL` 환경 변수로 정하고 사용자 입력 UI를 제공하지 않는다. 운영 값은 `https://media-nest.codeliners.cc`, 로컬 값은 `http://127.0.0.1:3030`만 사용한다. 기존 `WXT_MEDIA_NEST_API_BASE_URL`은 배포 전환 기간의 fallback으로만 지원한다.
+- API base URL은 `WXT_MYTUBE_EXTRACT_API_BASE_URL` 환경 변수로 정하고 사용자 입력 UI를 제공하지 않는다. 운영 값은 `https://media-nest.codeliners.cc`, 로컬 값은 `http://127.0.0.1:3030`만 사용한다. 기존 `WXT_MEDIA_NEST_API_BASE_URL`, non-WXT `MYTUBE_EXTRACT_API_BASE_URL`, `MEDIA_NEST_API_BASE_URL`은 빌드 설정 전환 기간의 fallback으로만 지원한다.
 - 파일명, 오디오 비트레이트, 비디오 해상도는 선택 옵션으로 유지한다.
 - 입력한 원본 URL은 기본적으로 Chrome storage에 저장하지 않는다.
 - `activeTab` 권한은 사용자가 popup에서 현재 탭 URL 가져오기 버튼을 누를 때만 사용한다.

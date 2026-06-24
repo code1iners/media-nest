@@ -26,6 +26,7 @@
 - `apps/api/.env`, `docker-compose.env`는 로컬 실행 파일로 취급하고 저장소 추적 대상에서 제외한다.
 - 앱별 Dockerfile은 Node base image, `yt-dlp` release API URL, ffmpeg apt package version을 명시해 컨테이너 런타임 변동성을 줄인다.
 - 저장소는 pnpm workspace와 Turborepo 기반 monorepo이며, NestJS API 서버는 `apps/api` 패키지가 소유한다.
+- Web 앱은 `apps/web` 패키지가 소유하며, Vite + React 화면에서 `/downloads` job API를 소비한다. Web 앱의 현재 구조와 검증 기준은 `docs/web/current-implementation-fsd.md`를 기준으로 한다.
 - Chrome 확장 프로그램은 `apps/chrome-extension` 패키지가 소유하며, WXT + React popup에서 이 API 계약을 소비한다. 확장 프로그램의 현재 구조와 검증 기준은 `docs/chrome-extension/current-implementation-fsd.md`를 기준으로 한다.
 
 ## Downloads

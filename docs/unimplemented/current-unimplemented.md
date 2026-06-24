@@ -41,3 +41,17 @@
 - 관련 근거:
   - `apps/worker/src/main.ts`
   - `apps/api/src/downloads/downloads.service.ts`
+
+## Web 앱 파일명 입력
+
+- 상태: 미구현
+- 대상: `apps/web`, `apps/api`
+- 필요성: 사용자가 완료 파일명을 직접 지정해야 하는 요구가 생길 수 있다.
+- 현재 상태: Web 앱은 `/downloads` job 생성 시 `type`, `url`, `quality`만 보내고, 완료 파일명은 API가 R2 object key 마지막 segment 기준으로 만든다. 호환용 `/audio`, `/video` 직접 다운로드 API와 Chrome 확장 프로그램은 `filename` 옵션을 지원한다.
+- 구현 메모:
+  - `/downloads` job 생성 DTO에 있는 `filename` 필드를 실제 저장/파일명 생성 정책까지 연결할지 먼저 결정한다.
+  - 파일명 검증 규칙은 기존 직접 다운로드 API의 경로 구분자/제어 문자 거부 정책과 맞춘다.
+- 관련 근거:
+  - `apps/web/src/domain/download-request/download-request.ts`
+  - `apps/api/src/downloads/dto/create-download-job.dto.ts`
+  - `apps/api/src/downloads/downloads.service.ts`
