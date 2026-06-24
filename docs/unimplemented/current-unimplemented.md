@@ -19,25 +19,25 @@
 
 - 상태: 미구현
 - 대상: `apps/chrome-extension`, `apps/api`
-- 필요성: 확장 프로그램에서도 장시간 다운로드 준비 상태와 취소 흐름을 명확히 보여줄 수 있어야 한다.
-- 현재 상태: 웹 앱과 API는 `/downloads` job 생성, 상태 조회, ready 파일 다운로드, 취소를 지원한다. Chrome 확장 프로그램은 호환용 `/audio`, `/video` 직접 다운로드 API를 계속 사용한다.
+- 필요성: 확장 프로그램에서도 장시간 다운로드 준비 상태를 명확히 보여줄 수 있어야 한다.
+- 현재 상태: 웹 앱과 API는 `/downloads` job 생성, 상태 조회, completed file 다운로드를 지원한다. Chrome 확장 프로그램은 호환용 `/audio`, `/video` 직접 다운로드 API를 계속 사용한다.
 - 구현 메모:
-  - Chrome 확장 프로그램은 `POST /downloads`, polling, ready file URL을 `chrome.downloads.download`로 넘기는 흐름으로 전환한다.
-  - 확장 프로그램 popup에서 취소 버튼을 노출할지, popup 닫힘과 job 취소를 연결할지 별도 UX 결정을 한다.
+  - Chrome 확장 프로그램은 `POST /downloads`, polling, completed file URL을 `chrome.downloads.download`로 넘기는 흐름으로 전환한다.
   - 기존 `/audio`, `/video` 직접 다운로드 API는 외부 호환성을 위해 유지한다.
 - 관련 근거:
   - `apps/api/src/downloads/downloads.controller.ts`
   - `apps/web/src/domain/download-request/download-request.ts`
 
-## 영속 다운로드 큐와 진행률 표시
+## 다중 worker 큐와 세부 진행률 표시
 
 - 상태: 미구현
 - 대상: `apps/api`, `apps/web`, `apps/chrome-extension`
-- 필요성: 다중 API 인스턴스, 서버 재시작 후 복구, 긴 변환 작업의 세부 진행률이 필요해질 수 있다.
-- 현재 상태: `/downloads`는 단일 프로세스 in-memory queue이며 상태는 `queued`, `running`, `ready`, `failed`, `canceled`, `expired`까지만 제공한다.
+- 필요성: 다중 worker 처리량, 긴 변환 작업의 세부 진행률이 필요해질 수 있다.
+- 현재 상태: `/downloads`는 PostgreSQL job table과 단일 worker FIFO polling을 사용하며 DB 상태는 `queued`, `processing`, `completed`, `failed`까지만 제공한다. 만료된 완료 asset은 API 응답의 `displayStatus: "expired"`로 표시한다.
 - 구현 메모:
-  - 다중 인스턴스나 재시작 복구가 필요해지면 Redis/BullMQ 전환을 검토한다.
+  - 다중 worker throughput이 필요해지면 Redis/BullMQ 또는 DB row locking 기반 claim 전략을 검토한다.
   - 진행률 퍼센트는 `yt-dlp` stderr 파싱 안정성 검증 후 별도 도입한다.
   - 사용자별 작업 이력, quota, retry 정책은 인증/계정 범위와 함께 정의한다.
 - 관련 근거:
-  - `apps/api/src/media/media-download-job.service.ts`
+  - `apps/worker/src/main.ts`
+  - `apps/api/src/downloads/downloads.service.ts`

@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ExtractionType {
+  audio
+  video
+}
+
+enum ExtractionJobStatus {
+  queued
+  processing
+  completed
+  failed
+}
+
+model ExtractionJob {
+  id          String              @id @default(uuid()) @db.Uuid
+  url         String
+  videoId     String
+  type        ExtractionType
+  quality     String
+  status      ExtractionJobStatus @default(queued)
+  startedAt   DateTime?
+  errorCode   String?
+  errorDetail String?
+  assetId     String?             @db.Uuid
+  asset       ExtractedAsset?     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+
+  @@index([status, createdAt])
+  @@index([assetId])
+}
+
+model ExtractedAsset {
+  id        String          @id @default(uuid()) @db.Uuid
+  videoId   String
+  type      ExtractionType
+  quality   String
+  objectKey String
+  expiresAt DateTime
+  createdAt DateTime        @default(now())
+  jobs      ExtractionJob[]
+
+  @@unique([videoId, type, quality])
+  @@index([expiresAt])
+}

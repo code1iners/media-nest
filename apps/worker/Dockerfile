@@ -23,12 +23,16 @@ RUN mkdir -p ${COREPACK_HOME} && \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/chrome-extension/package.json ./apps/chrome-extension/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/worker/package.json ./apps/worker/package.json
+COPY packages/db/package.json ./packages/db/package.json
 ARG YOUTUBE_DL_HOST
 RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm --filter api run build
-RUN pnpm --filter api deploy --prod --legacy /prod/api
+RUN pnpm --filter @mytube-extract/db run build
+RUN pnpm --filter worker run build
+RUN pnpm --filter worker deploy --prod --legacy /prod/worker
 
 FROM ${NODE_IMAGE} AS production
 
@@ -39,7 +43,6 @@ ARG FFMPEG_VERSION
 ARG EXPECTED_FFMPEG_VERSION
 
 ENV NODE_ENV=production
-ENV PORT=3030
 ENV FFMPEG_LOCATION=/usr/bin/ffmpeg
 ENV EXPECTED_NODE_MAJOR=22
 ENV EXPECTED_YT_DLP_VERSION=${YT_DLP_VERSION}
@@ -59,12 +62,8 @@ RUN mkdir -p ${COREPACK_HOME} && \
     chmod -R a+rX ${COREPACK_HOME}
 
 COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY --chown=node:node --from=build /prod/api ./apps/api
+COPY --chown=node:node --from=build /prod/worker ./apps/worker
 
 USER node
 
-EXPOSE 3030
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "const port = process.env.PORT || 3030; fetch('http://127.0.0.1:' + port + '/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"]
-
-CMD ["node", "apps/api/dist/main"]
+CMD ["node", "apps/worker/dist/main"]

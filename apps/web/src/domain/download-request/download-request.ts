@@ -3,58 +3,95 @@ import { z } from 'zod';
 /** MyTube Extract 다운로드 형식. */
 export type DownloadMode = 'audio' | 'video';
 
+/** 다운로드 품질 key. */
+export type DownloadQuality =
+  | 'default'
+  | '128'
+  | '192'
+  | '320'
+  | '360'
+  | '720'
+  | '1080';
+
+/** 다운로드 job 상태. */
+export type DownloadJobStatus =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+/** 화면 표시 상태. */
+export type DownloadDisplayStatus = DownloadJobStatus | 'expired';
+
+/** 다운로드 실패 코드. */
+export type DownloadErrorCode =
+  | 'INVALID_URL'
+  | 'EXTRACTION_FAILED'
+  | 'UPLOAD_FAILED'
+  | 'UNKNOWN';
+
 /** 다운로드 입력 검증 결과. */
 export type DownloadValidation =
   | {
       /** 검증 상태. */
       kind: 'empty';
-      /** 사용자에게 보여줄 메시지. */
+      /** 사용자 표시 메시지. */
       message: string;
     }
   | {
       /** 검증 상태. */
       kind: 'invalid';
-      /** 사용자에게 보여줄 메시지. */
+      /** 사용자 표시 메시지. */
       message: string;
     }
   | {
       /** 검증 상태. */
       kind: 'ready';
-      /** 사용자에게 보여줄 메시지. */
+      /** 사용자 표시 메시지. */
       message: string;
     };
 
-/** 다운로드 job 상태. */
-export type DownloadJobStatus =
-  | 'queued'
-  | 'running'
-  | 'ready'
-  | 'failed'
-  | 'canceled'
-  | 'expired';
-
-/** 다운로드 job 상태 응답. */
-export type DownloadJobSnapshot = {
+/** 다운로드 API 응답. */
+export type DownloadResponse = {
   /** 다운로드 job ID. */
   jobId: string;
-  /** 다운로드 형식. */
-  type: DownloadMode;
-  /** 현재 다운로드 job 상태. */
+  /** 실제 job 상태. */
   status: DownloadJobStatus;
-  /** 생성 시각. */
+  /** asset 만료까지 반영한 표시 상태. */
+  displayStatus: DownloadDisplayStatus;
+  /** 상태 기반 진행률. */
+  progress: number | null;
+  /** 추출 형식. */
+  type: DownloadMode;
+  /** 선택 품질. */
+  quality: DownloadQuality;
+  /** 요청 시작 시각. */
   createdAt: string;
-  /** 마지막 변경 시각. */
-  updatedAt: string;
-  /** 사용자에게 보여줄 상태 메시지. */
-  message?: string;
+  /** 보관 기간 일수. */
+  retentionDays: number;
+  /** 완료된 파일 다운로드 URL. */
+  downloadUrl: string | null;
+  /** 실패 코드. */
+  errorCode: DownloadErrorCode | null;
+  /** 사용자 표시 메시지. */
+  message: string;
 };
 
-/** 다운로드 job 생성 응답. */
-export type CreateDownloadJobResponse = DownloadJobSnapshot & {
-  /** 상태 조회 URL. */
-  statusUrl: string;
-  /** 파일 다운로드 URL. */
-  fileUrl: string;
+/** fetch 호환 함수. */
+export type DownloadFetch = typeof fetch;
+
+/** 다운로드 job polling 옵션. */
+export type WaitForDownloadJobOptions = {
+  /** API base URL. */
+  apiBaseUrl?: string;
+  /** 테스트에서 대체할 fetch 함수. */
+  fetcher?: DownloadFetch;
+  /** polling 중단 신호. */
+  signal?: AbortSignal;
+  /** polling 간격. */
+  intervalMs?: number;
+  /** 상태 변경 콜백. */
+  onStatus?: (snapshot: DownloadResponse) => void;
 };
 
 /** 다운로드 job 생성 요청. */
@@ -65,30 +102,11 @@ export type CreateDownloadJobRequest = {
   body: {
     /** 다운로드 형식. */
     type: DownloadMode;
-    /** 다운로드할 원본 URL. */
+    /** 다운로드할 YouTube URL. */
     url: string;
-    /** 선택 파일명. */
-    filename?: string;
     /** 선택 품질 값. */
-    quality?: string;
+    quality: DownloadQuality;
   };
-};
-
-/** fetch 호환 함수. */
-export type DownloadFetch = typeof fetch;
-
-/** 다운로드 job polling 옵션. */
-export type WaitForDownloadJobFileUrlOptions = {
-  /** API base URL. */
-  apiBaseUrl?: string;
-  /** 테스트에서 대체할 fetch 함수. */
-  fetcher?: DownloadFetch;
-  /** polling 중단 신호. */
-  signal?: AbortSignal;
-  /** polling 간격. */
-  intervalMs?: number;
-  /** 상태 변경 콜백. */
-  onStatus?: (snapshot: DownloadJobSnapshot) => void;
 };
 
 /** 로컬 MyTube Extract API 서버 주소. */
@@ -97,41 +115,29 @@ const LOCAL_API_BASE_URL = 'http://127.0.0.1:3030';
 /** 운영 MyTube Extract API 서버 주소. */
 const PRODUCTION_API_BASE_URL = 'https://media-nest.codeliners.cc';
 
-/** 현재 실행 환경에 맞는 기본 MyTube Extract API 서버 주소. */
+/** 기본 API 서버 주소. */
 export const DEFAULT_API_BASE_URL = import.meta.env.DEV
   ? LOCAL_API_BASE_URL
   : PRODUCTION_API_BASE_URL;
 
-/** API에서 거부하는 파일명 문자. */
-const BLOCKED_FILENAME_PATTERN = /[\/\\\0\r\n]/;
-
-/** 양의 정수 문자열 형식. */
-const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/;
-
 /** 기본 다운로드 job polling 간격. */
-const DEFAULT_POLL_INTERVAL_MS = 1500;
+const DEFAULT_POLL_INTERVAL_MS = 2500;
+
+/** YouTube video ID 형식. */
+const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
 
 /** 다운로드 요청 입력값 schema. */
 export const downloadDraftSchema = z.object({
-  /** 사용자가 입력한 원본 미디어 URL. */
+  /** 사용자가 입력한 YouTube URL. */
   sourceUrl: z
     .string()
     .trim()
-    .min(1, 'URL을 입력하면 다운로드를 시작할 수 있습니다.')
-    .refine(isUrl, '올바른 URL 형식이 아닙니다.')
-    .refine(isHttpUrl, 'http 또는 https URL만 사용할 수 있습니다.'),
+    .min(1, 'YouTube URL을 입력해 주세요.')
+    .refine(isSupportedYoutubeUrl, '지원하는 YouTube URL을 입력해 주세요.'),
   /** 다운로드 형식. */
   mode: z.enum(['audio', 'video']),
-  /** 선택 파일명. */
-  filename: z
-    .string()
-    .trim()
-    .refine(isSafeOptionalFilename, '파일명에는 경로 구분자나 제어 문자를 사용할 수 없습니다.'),
   /** 선택 품질 값. */
-  quality: z
-    .string()
-    .trim()
-    .refine(isOptionalPositiveInteger, '품질 값은 양의 정수만 사용할 수 있습니다.'),
+  quality: z.enum(['default', '128', '192', '320', '360', '720', '1080']),
 });
 
 /** 다운로드 요청 입력값. */
@@ -139,21 +145,38 @@ export type DownloadDraft = z.infer<typeof downloadDraftSchema>;
 
 /** 앱 초기 입력값. */
 export const INITIAL_DOWNLOAD_DRAFT: DownloadDraft = {
-  sourceUrl: '',
   mode: 'audio',
-  filename: '',
-  quality: '',
+  quality: 'default',
+  sourceUrl: '',
 };
 
+/** audio 품질 선택지. */
+export const AUDIO_QUALITY_OPTIONS = [
+  { label: '기본값', value: 'default' },
+  { label: '128', value: '128' },
+  { label: '192', value: '192' },
+  { label: '320', value: '320' },
+] as const;
+
+/** video 품질 선택지. */
+export const VIDEO_QUALITY_OPTIONS = [
+  { label: '기본값', value: 'default' },
+  { label: '360', value: '360' },
+  { label: '720', value: '720' },
+  { label: '1080', value: '1080' },
+] as const;
+
 /** 다운로드 입력값을 검증한다. */
-export function validateDownloadDraft(draft: DownloadDraft): DownloadValidation {
+export function validateDownloadDraft(
+  draft: DownloadDraft,
+): DownloadValidation {
   /** 앞뒤 공백을 제거한 원본 URL. */
   const sourceUrl = draft.sourceUrl.trim();
 
   if (!sourceUrl) {
     return {
       kind: 'empty',
-      message: 'URL을 입력하면 다운로드를 시작할 수 있습니다.',
+      message: 'YouTube URL을 입력해 주세요.',
     };
   }
 
@@ -161,8 +184,9 @@ export function validateDownloadDraft(draft: DownloadDraft): DownloadValidation 
   const parsedDraft = downloadDraftSchema.safeParse(draft);
 
   if (!parsedDraft.success) {
-    /** 사용자에게 표시할 첫 번째 검증 메시지. */
-    const message = parsedDraft.error.issues[0]?.message ?? '입력값을 확인해주세요.';
+    /** 첫 번째 검증 메시지. */
+    const message =
+      parsedDraft.error.issues[0]?.message ?? '입력값을 확인해 주세요.';
 
     return {
       kind: 'invalid',
@@ -172,7 +196,7 @@ export function validateDownloadDraft(draft: DownloadDraft): DownloadValidation 
 
   return {
     kind: 'ready',
-    message: '다운로드를 시작할 수 있습니다.',
+    message: '추출 요청을 보낼 수 있습니다.',
   };
 }
 
@@ -183,22 +207,13 @@ export function buildCreateDownloadJobRequest(
 ): CreateDownloadJobRequest {
   /** schema를 통과한 다운로드 입력값. */
   const parsedDraft = downloadDraftSchema.parse(draft);
-  /** 다운로드 job 생성 요청 body. */
-  const body: CreateDownloadJobRequest['body'] = {
-    type: parsedDraft.mode,
-    url: parsedDraft.sourceUrl,
-  };
-
-  if (parsedDraft.filename) {
-    body.filename = parsedDraft.filename;
-  }
-
-  if (parsedDraft.quality) {
-    body.quality = parsedDraft.quality;
-  }
 
   return {
-    body,
+    body: {
+      quality: parsedDraft.quality,
+      type: parsedDraft.mode,
+      url: parsedDraft.sourceUrl.trim(),
+    },
     url: buildApiUrl('/downloads', apiBaseUrl),
   };
 }
@@ -206,7 +221,14 @@ export function buildCreateDownloadJobRequest(
 /** 다운로드 job을 생성한다. */
 export async function createDownloadJob(
   draft: DownloadDraft,
-  options: { apiBaseUrl?: string; fetcher?: DownloadFetch; signal?: AbortSignal } = {},
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: DownloadFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
 ) {
   /** 다운로드 job 생성 요청. */
   const request = buildCreateDownloadJobRequest(draft, options.apiBaseUrl);
@@ -226,67 +248,55 @@ export async function createDownloadJob(
     throw new Error('Download job create failed.');
   }
 
-  return (await response.json()) as CreateDownloadJobResponse;
+  return (await response.json()) as DownloadResponse;
 }
 
-/** 다운로드 job이 ready가 될 때까지 기다리고 파일 URL을 반환한다. */
-export async function waitForDownloadJobFileUrl(
-  job: CreateDownloadJobResponse,
-  options: WaitForDownloadJobFileUrlOptions = {},
+/** 다운로드 job 상태를 조회한다. */
+export async function getDownloadJob(
+  jobId: string,
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: DownloadFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
 ) {
   /** API 요청에 사용할 fetch 함수. */
   const fetcher = options.fetcher ?? fetch;
-  /** polling 간격. */
-  const intervalMs = options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-
-  if (job.status === 'ready') {
-    return buildApiUrl(job.fileUrl, options.apiBaseUrl);
-  }
-
-  while (true) {
-    await wait(intervalMs, options.signal);
-
-    /** 다운로드 job 상태 응답. */
-    const response = await fetcher(buildApiUrl(job.statusUrl, options.apiBaseUrl), {
+  /** 다운로드 job 상태 응답. */
+  const response = await fetcher(
+    buildApiUrl(`/downloads/${jobId}`, options.apiBaseUrl),
+    {
       signal: options.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error('Download job status failed.');
-    }
-
-    /** 현재 다운로드 job 상태. */
-    const snapshot = (await response.json()) as DownloadJobSnapshot;
-
-    options.onStatus?.(snapshot);
-
-    if (snapshot.status === 'ready') {
-      return buildApiUrl(job.fileUrl, options.apiBaseUrl);
-    }
-
-    if (['failed', 'canceled', 'expired'].includes(snapshot.status)) {
-      throw new Error(snapshot.message ?? 'Download job failed.');
-    }
-  }
-}
-
-/** 다운로드 job을 취소한다. */
-export async function cancelDownloadJob(
-  job: DownloadJobSnapshot,
-  options: { apiBaseUrl?: string; fetcher?: DownloadFetch } = {},
-) {
-  /** API 요청에 사용할 fetch 함수. */
-  const fetcher = options.fetcher ?? fetch;
-  /** 다운로드 job 취소 응답. */
-  const response = await fetcher(buildApiUrl(`/downloads/${job.jobId}`, options.apiBaseUrl), {
-    method: 'DELETE',
-  });
+    },
+  );
 
   if (!response.ok) {
-    throw new Error('Download job cancel failed.');
+    throw new Error('Download job status failed.');
   }
 
-  return (await response.json()) as DownloadJobSnapshot;
+  return (await response.json()) as DownloadResponse;
+}
+
+/** 다운로드 job이 terminal 상태가 될 때까지 polling한다. */
+export async function waitForDownloadJob(
+  job: DownloadResponse,
+  options: WaitForDownloadJobOptions = {},
+) {
+  /** polling 간격. */
+  const intervalMs = options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  /** 현재 상태 snapshot. */
+  let snapshot = job;
+
+  while (!isTerminalStatus(snapshot.displayStatus)) {
+    await wait(intervalMs, options.signal);
+    snapshot = await getDownloadJob(snapshot.jobId, options);
+    options.onStatus?.(snapshot);
+  }
+
+  return snapshot;
 }
 
 /** API base URL을 .env 입력값 기준으로 정규화한다. */
@@ -296,7 +306,10 @@ export function normalizeApiBaseUrl(apiBaseUrl = DEFAULT_API_BASE_URL) {
   /** URL 객체로 검증한 API base URL. */
   const parsedApiBaseUrl = new URL(trimmedApiBaseUrl);
 
-  if (parsedApiBaseUrl.protocol !== 'http:' && parsedApiBaseUrl.protocol !== 'https:') {
+  if (
+    parsedApiBaseUrl.protocol !== 'http:' &&
+    parsedApiBaseUrl.protocol !== 'https:'
+  ) {
     throw new Error('API base URL must use http or https.');
   }
 
@@ -314,6 +327,11 @@ export function buildApiUrl(path: string, apiBaseUrl = DEFAULT_API_BASE_URL) {
   const normalizedPath = path.replace(/^\/+/, '');
 
   return `${normalizedApiBaseUrl}/${normalizedPath}`;
+}
+
+/** terminal 상태인지 확인한다. */
+export function isTerminalStatus(status: DownloadDisplayStatus) {
+  return status === 'completed' || status === 'failed' || status === 'expired';
 }
 
 /** polling 간격만큼 대기한다. */
@@ -343,43 +361,34 @@ function createAbortError() {
   return new DOMException('Aborted', 'AbortError');
 }
 
-/** URL 형식인지 확인한다. */
-function isUrl(value: string) {
+/** 지원 YouTube URL인지 확인한다. */
+function isSupportedYoutubeUrl(value: string) {
   try {
-    new URL(value);
+    /** URL parser를 통과한 사용자 입력 URL. */
+    const url = new URL(value);
+    /** host 정규화 값. */
+    const host = url.hostname.toLowerCase();
 
-    return true;
+    if (host === 'youtu.be') {
+      return YOUTUBE_VIDEO_ID_PATTERN.test(
+        url.pathname.split('/').filter(Boolean)[0] ?? '',
+      );
+    }
+
+    if (host === 'youtube.com' || host === 'www.youtube.com') {
+      if (url.pathname === '/watch') {
+        return YOUTUBE_VIDEO_ID_PATTERN.test(url.searchParams.get('v') ?? '');
+      }
+
+      if (url.pathname.startsWith('/shorts/')) {
+        return YOUTUBE_VIDEO_ID_PATTERN.test(
+          url.pathname.split('/').filter(Boolean)[1] ?? '',
+        );
+      }
+    }
   } catch {
     return false;
   }
-}
 
-/** http/https URL인지 확인한다. */
-function isHttpUrl(value: string) {
-  try {
-    /** URL 파싱 결과. */
-    const parsedUrl = new URL(value);
-
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-/** API가 허용하는 optional filename인지 확인한다. */
-function isSafeOptionalFilename(filename: string) {
-  if (!filename) {
-    return true;
-  }
-
-  return (
-    filename !== '.' &&
-    filename !== '..' &&
-    !BLOCKED_FILENAME_PATTERN.test(filename)
-  );
-}
-
-/** 비어 있거나 양의 정수인 품질 값인지 확인한다. */
-function isOptionalPositiveInteger(quality: string) {
-  return !quality || POSITIVE_INTEGER_PATTERN.test(quality);
+  return false;
 }

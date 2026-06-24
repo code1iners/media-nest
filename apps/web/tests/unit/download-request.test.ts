@@ -2,16 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   type DownloadDraft,
   buildCreateDownloadJobRequest,
-  waitForDownloadJobFileUrl,
   validateDownloadDraft,
+  waitForDownloadJob,
 } from '../../src/domain/download-request/download-request';
 
 /** 테스트용 기본 다운로드 입력값. */
 const baseDraft: DownloadDraft = {
-  sourceUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   mode: 'audio',
-  filename: '',
-  quality: '',
+  quality: 'default',
+  sourceUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
 };
 
 describe('download request', () => {
@@ -24,35 +23,32 @@ describe('download request', () => {
 
   it('rejects malformed source URLs', () => {
     /** 검증 결과. */
-    const validation = validateDownloadDraft({ ...baseDraft, sourceUrl: 'not-url' });
+    const validation = validateDownloadDraft({
+      ...baseDraft,
+      sourceUrl: 'not-url',
+    });
 
     expect(validation.kind).toBe('invalid');
   });
 
-  it('rejects non-positive integer quality values before opening the API URL', () => {
-    /** 검증 결과 목록. */
-    const validations = ['0', '-1', '1.5'].map((quality) =>
-      validateDownloadDraft({ ...baseDraft, quality }),
-    );
+  it('rejects non-YouTube URLs', () => {
+    /** 검증 결과. */
+    const validation = validateDownloadDraft({
+      ...baseDraft,
+      sourceUrl: 'https://example.com/video',
+    });
 
-    expect(validations.map((validation) => validation.kind)).toEqual([
-      'invalid',
-      'invalid',
-      'invalid',
-    ]);
+    expect(validation.kind).toBe('invalid');
   });
 
-  it('rejects filenames that the API refuses', () => {
-    /** 검증 결과 목록. */
-    const validations = ['../clip', 'clip/name', '..'].map((filename) =>
-      validateDownloadDraft({ ...baseDraft, filename }),
-    );
+  it('accepts YouTube Shorts URLs', () => {
+    /** 검증 결과. */
+    const validation = validateDownloadDraft({
+      ...baseDraft,
+      sourceUrl: 'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+    });
 
-    expect(validations.map((validation) => validation.kind)).toEqual([
-      'invalid',
-      'invalid',
-      'invalid',
-    ]);
+    expect(validation.kind).toBe('ready');
   });
 
   it('builds an audio download job request', () => {
@@ -60,7 +56,6 @@ describe('download request', () => {
     const request = buildCreateDownloadJobRequest(
       {
         ...baseDraft,
-        filename: 'clip',
         quality: '192',
       },
       'http://127.0.0.1:3030',
@@ -68,7 +63,6 @@ describe('download request', () => {
 
     expect(request.url).toBe('http://127.0.0.1:3030/downloads');
     expect(request.body).toEqual({
-      filename: 'clip',
       quality: '192',
       type: 'audio',
       url: baseDraft.sourceUrl,
@@ -103,16 +97,22 @@ describe('download request', () => {
     expect(request.url).toBe('https://mytube-extract.example/api/downloads');
   });
 
-  it('returns a file URL when polling reaches ready status', async () => {
+  it('polls until a terminal completed status', async () => {
     /** status 조회 mock fetch. */
     const fetcher = async () =>
       new Response(
         JSON.stringify({
-          createdAt: '2026-06-23T00:00:00.000Z',
+          createdAt: '2026-06-24T05:32:00.000Z',
+          displayStatus: 'completed',
+          downloadUrl: '/downloads/job-1/file',
+          errorCode: null,
           jobId: 'job-1',
-          status: 'ready',
+          message: '파일이 준비되었습니다.',
+          progress: 100,
+          quality: '192',
+          retentionDays: 7,
+          status: 'completed',
           type: 'audio',
-          updatedAt: '2026-06-23T00:00:01.000Z',
         }),
         {
           headers: { 'Content-Type': 'application/json' },
@@ -121,15 +121,19 @@ describe('download request', () => {
       );
 
     await expect(
-      waitForDownloadJobFileUrl(
+      waitForDownloadJob(
         {
-          createdAt: '2026-06-23T00:00:00.000Z',
-          fileUrl: '/downloads/job-1/file',
+          createdAt: '2026-06-24T05:32:00.000Z',
+          displayStatus: 'queued',
+          downloadUrl: null,
+          errorCode: null,
           jobId: 'job-1',
+          message: '요청이 접수되어 대기 중입니다.',
+          progress: 0,
+          quality: '192',
+          retentionDays: 7,
           status: 'queued',
-          statusUrl: '/downloads/job-1',
           type: 'audio',
-          updatedAt: '2026-06-23T00:00:00.000Z',
         },
         {
           apiBaseUrl: 'https://mytube-extract.example/api',
@@ -137,6 +141,9 @@ describe('download request', () => {
           intervalMs: 0,
         },
       ),
-    ).resolves.toBe('https://mytube-extract.example/api/downloads/job-1/file');
+    ).resolves.toMatchObject({
+      displayStatus: 'completed',
+      downloadUrl: '/downloads/job-1/file',
+    });
   });
 });

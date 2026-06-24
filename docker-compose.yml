@@ -1,11 +1,22 @@
 services:
-  mytube-extract:
+  api:
     build:
       context: .
-    image: mytube-extract:latest
-    container_name: mytube-extract
+      dockerfile: apps/api/Dockerfile
+    image: mytube-extract-api:latest
+    container_name: mytube-extract-api
     restart: unless-stopped
     env_file:
-      - .env.production
+      - docker-compose.env
     ports:
       - "127.0.0.1:3030:3030"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    image: mytube-extract-worker:latest
+    container_name: mytube-extract-worker
+    restart: unless-stopped
+    env_file:
+      - docker-compose.env

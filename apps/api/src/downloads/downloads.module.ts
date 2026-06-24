@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AudioService } from '../audio/audio.service';
-import { MediaModule } from '../media/media.module';
-import { VideoService } from '../video/video.service';
+import { PrismaModule } from '../prisma/prisma.module';
+import { AssetCleanupService } from './asset-cleanup.service';
 import { DownloadsController } from './downloads.controller';
+import { DownloadsService } from './downloads.service';
+import { R2StorageService } from './r2-storage.service';
 
 @Module({
-  imports: [MediaModule],
+  imports: [PrismaModule],
   controllers: [DownloadsController],
-  providers: [AudioService, VideoService],
+  providers: [AssetCleanupService, DownloadsService, R2StorageService],
 })
 export class DownloadsModule {}

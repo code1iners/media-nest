@@ -7,44 +7,29 @@ import {
   createCorsOptions,
 } from './../src/cors-options';
 import { MEDIA_DOWNLOADER } from './../src/media/media-downloader.port';
-
-/** e2e 다운로드 mock 제어 핸들. */
-type DownloadDeferred = {
-  /** mock 다운로드 promise. */
-  promise: Promise<void>;
-  /** mock 다운로드 성공 resolver. */
-  resolve: () => void;
-  /** mock 다운로드 실패 rejecter. */
-  reject: (error: Error) => void;
-};
-
-/** mock downloader가 대기할 promise를 만든다. */
-function createDownloadDeferred(): DownloadDeferred {
-  /** 성공 resolver. */
-  let resolve: () => void = () => undefined;
-  /** 실패 rejecter. */
-  let reject: (error: Error) => void = () => undefined;
-  /** mock 다운로드 promise. */
-  const promise = new Promise<void>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
-  });
-
-  return { promise, reject, resolve };
-}
-
-/** async job worker가 상태를 반영할 시간을 준다. */
-function flushAsync() {
-  return new Promise<void>((resolve) => {
-    setImmediate(resolve);
-  });
-}
+import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('MyTubeExtract API (e2e)', () => {
   let app: INestApplication;
+  /** e2e job 저장소. */
+  let jobs: Map<string, Record<string, unknown>>;
   /** e2e mock downloader. */
   const downloaderMock = {
     download: jest.fn(),
+  };
+  /** e2e Prisma mock. */
+  const prismaMock = {
+    $connect: jest.fn(),
+    $disconnect: jest.fn(),
+    extractedAsset: {
+      findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      delete: jest.fn(),
+    },
+    extractionJob: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+    },
   };
 
   beforeAll(async () => {
@@ -53,6 +38,8 @@ describe('MyTubeExtract API (e2e)', () => {
     })
       .overrideProvider(MEDIA_DOWNLOADER)
       .useValue(downloaderMock)
+      .overrideProvider(PrismaService)
+      .useValue(prismaMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -62,7 +49,28 @@ describe('MyTubeExtract API (e2e)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jobs = new Map();
     downloaderMock.download.mockResolvedValue(undefined);
+    prismaMock.extractedAsset.findFirst.mockResolvedValue(null);
+    prismaMock.extractionJob.create.mockImplementation(({ data }) => {
+      /** 생성된 e2e job ID. */
+      const id = `job-${jobs.size + 1}`;
+      /** 생성된 e2e job. */
+      const job = {
+        asset: null,
+        createdAt: new Date('2026-06-24T05:32:00.000Z'),
+        errorCode: null,
+        id,
+        ...data,
+      };
+
+      jobs.set(id, job);
+
+      return Promise.resolve(job);
+    });
+    prismaMock.extractionJob.findUnique.mockImplementation(({ where }) =>
+      Promise.resolve(jobs.get(where.id) ?? null),
+    );
   });
 
   afterAll(async () => {
@@ -144,20 +152,19 @@ describe('MyTubeExtract API (e2e)', () => {
       .send({
         quality: '192',
         type: 'audio',
-        url: 'https://example.com/video',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       })
       .expect(201);
 
     expect(response.body).toMatchObject({
-      fileUrl: expect.stringMatching(/^\/downloads\/.+\/file$/),
       jobId: expect.any(String),
+      progress: 0,
       status: 'queued',
-      statusUrl: expect.stringMatching(/^\/downloads\/.+$/),
       type: 'audio',
     });
     expect(response.body.filePath).toBeUndefined();
-
-    await flushAsync();
+    expect(response.body.fileUrl).toBeUndefined();
+    expect(response.body.statusUrl).toBeUndefined();
   });
 
   it('/downloads rejects invalid job input before starting a download', () => {
@@ -170,41 +177,23 @@ describe('MyTubeExtract API (e2e)', () => {
       .expect(400);
   });
 
-  it('/downloads exposes status and rejects file download while running', async () => {
-    /** pending downloader 제어 핸들. */
-    const deferred = createDownloadDeferred();
-    downloaderMock.download.mockReturnValueOnce(deferred.promise);
-
+  it('/downloads exposes queued job status', async () => {
     /** 다운로드 job 생성 응답. */
     const createResponse = await request(app.getHttpServer())
       .post('/downloads')
       .send({
         type: 'video',
-        url: 'https://example.com/video',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       })
       .expect(201);
-
-    await flushAsync();
 
     await request(app.getHttpServer())
       .get(`/downloads/${createResponse.body.jobId}`)
       .expect(200)
       .expect((response) => {
-        expect(response.body.status).toBe('running');
+        expect(response.body.status).toBe('queued');
+        expect(response.body.displayStatus).toBe('queued');
+        expect(response.body.progress).toBe(0);
       });
-
-    await request(app.getHttpServer())
-      .get(`/downloads/${createResponse.body.jobId}/file`)
-      .expect(409);
-
-    await request(app.getHttpServer())
-      .delete(`/downloads/${createResponse.body.jobId}`)
-      .expect(200)
-      .expect((response) => {
-        expect(response.body.status).toBe('canceled');
-      });
-
-    deferred.reject(new Error('aborted'));
-    await flushAsync();
   });
 });

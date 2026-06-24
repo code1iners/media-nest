@@ -2,27 +2,37 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
-  type CreateDownloadJobResponse,
+  AUDIO_QUALITY_OPTIONS,
   type DownloadDraft,
-  type DownloadJobSnapshot,
+  type DownloadResponse,
   INITIAL_DOWNLOAD_DRAFT,
-  cancelDownloadJob,
+  VIDEO_QUALITY_OPTIONS,
+  buildApiUrl,
   createDownloadJob,
   downloadDraftSchema,
+  isTerminalStatus,
   validateDownloadDraft,
-  waitForDownloadJobFileUrl,
+  waitForDownloadJob,
 } from '../domain/download-request/download-request';
+
+/** 상태 표시 메타데이터. */
+const STATUS_ITEMS = [
+  { key: 'queued', label: '대기' },
+  { key: 'processing', label: '처리' },
+  { key: 'completed', label: '완료' },
+  { key: 'expired', label: '만료' },
+] as const;
 
 /** MyTube Extract Vite CSR web app. */
 export function App() {
   // States.
 
-  /** 다운로드 요청 결과 메시지. */
-  const [downloadMessage, setDownloadMessage] = useState('');
-  /** 다운로드 요청 실패 여부. */
-  const [downloadFailed, setDownloadFailed] = useState(false);
-  /** 현재 생성되어 진행 중인 다운로드 job. */
-  const [activeJob, setActiveJob] = useState<DownloadJobSnapshot | null>(null);
+  /** 현재 생성되어 진행 중이거나 완료된 다운로드 job. */
+  const [activeJob, setActiveJob] = useState<DownloadResponse | null>(null);
+  /** 요청 실패 메시지. */
+  const [requestError, setRequestError] = useState('');
+  /** job 생성 요청 진행 여부. */
+  const [submitting, setSubmitting] = useState(false);
 
   // Refs.
 
@@ -50,49 +60,28 @@ export function App() {
   const draft = watch();
   /** 현재 입력 검증 결과. */
   const validation = validateDownloadDraft(draft);
-  /** 다운로드 실행 가능 여부. */
-  const isJobActive = activeJob?.status === 'queued' || activeJob?.status === 'running';
-  /** 다운로드 실행 가능 여부. */
-  const canSubmit = validation.kind === 'ready' && isValid && !isJobActive;
-  /** 품질 입력 라벨. */
-  const qualityLabel = draft.mode === 'audio' ? '최대 비트레이트' : '최대 해상도';
-  /** 품질 입력 placeholder. */
-  const qualityPlaceholder = draft.mode === 'audio' ? '192' : '720';
-  /** 사용자에게 표시할 현재 상태 메시지. */
-  const statusMessage = downloadMessage || validation.message;
-  /** 현재 상태 메시지의 시각적 상태. */
-  const statusTone =
-    isJobActive
-      ? 'info'
-      : downloadFailed || validation.kind === 'invalid'
-      ? 'danger'
-      : validation.kind === 'ready'
-        ? 'success'
-        : 'warning';
-  /** 현재 상태를 짧게 보여주는 브랜드식 label. */
-  const statusLabel = downloadFailed
-    ? 'ERROR'
-    : isJobActive
-      ? 'WORK'
-    : downloadMessage
-      ? 'LOOT'
-      : validation.kind === 'ready'
-        ? 'READY'
-        : validation.kind === 'invalid'
-          ? 'CHECK'
-          : 'INPUT';
+  /** 현재 품질 선택지. */
+  const qualityOptions =
+    draft.mode === 'audio' ? AUDIO_QUALITY_OPTIONS : VIDEO_QUALITY_OPTIONS;
+  /** terminal 상태가 아닌 job 진행 여부. */
+  const jobInProgress =
+    !!activeJob && !isTerminalStatus(activeJob.displayStatus);
+  /** 추출 요청 가능 여부. */
+  const canSubmit =
+    validation.kind === 'ready' && isValid && !jobInProgress && !submitting;
+  /** 오른쪽 status panel에 표시할 job. */
+  const statusJob = activeJob ?? createIdleJob(draft);
+  /** 10칸 진행률 bar 중 채울 칸 수. */
+  const filledProgressCells =
+    statusJob.progress === null ? 0 : Math.round(statusJob.progress / 10);
+  /** 현재 상태 제목. */
+  const statusTitle = createStatusTitle(statusJob);
+  /** 현재 상태 문구. */
+  const statusMessage = requestError || statusJob.message || validation.message;
+  /** 요청 시작 시각 표시값. */
+  const createdTime = formatTime(statusJob.createdAt);
 
   // Functions.
-
-  /** 입력 변경 후 이전 다운로드 결과를 초기화한다. */
-  function clearDownloadResult() {
-    if (isJobActive) {
-      return;
-    }
-
-    setDownloadMessage('');
-    setDownloadFailed(false);
-  }
 
   /** API base URL 환경 설정을 반환한다. */
   function getApiBaseUrl() {
@@ -102,36 +91,19 @@ export function App() {
     );
   }
 
-  /** 현재 polling만 중단한다. 서버 job 취소는 별도 handler가 담당한다. */
+  /** 현재 polling만 중단한다. */
   function stopPolling() {
     pollingAbortControllerRef.current?.abort();
     pollingAbortControllerRef.current = null;
   }
 
-  /** job 상태를 사용자 메시지로 바꾼다. */
-  function getJobStatusMessage(job: DownloadJobSnapshot) {
-    if (job.status === 'queued') {
-      return '다운로드 파일을 준비 중입니다.';
+  /** 입력 변경 후 이전 실패 상태를 초기화한다. */
+  function clearRequestError() {
+    if (jobInProgress) {
+      return;
     }
 
-    if (job.status === 'running') {
-      return '다운로드 파일을 준비 중입니다.';
-    }
-
-    return job.message ?? '다운로드 작업 상태를 확인했습니다.';
-  }
-
-  /** API attachment URL을 브라우저 다운로드 매니저로 넘긴다. */
-  function startBrowserDownload(downloadUrl: string) {
-    /** 현재 화면을 유지한 채 attachment 응답만 호출하는 숨김 frame. */
-    const downloadFrame = document.createElement('iframe');
-
-    downloadFrame.hidden = true;
-    downloadFrame.src = downloadUrl;
-    document.body.append(downloadFrame);
-    window.setTimeout(() => {
-      downloadFrame.remove();
-    }, 60_000);
+    setRequestError('');
   }
 
   // Effects.
@@ -146,8 +118,8 @@ export function App() {
 
   /** 다운로드 형식 변경 이벤트를 처리한다. */
   function handleModeChange() {
-    clearDownloadResult();
-    setValue('quality', '', {
+    clearRequestError();
+    setValue('quality', 'default', {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -155,8 +127,9 @@ export function App() {
 
   /** 다운로드 실행 submit 이벤트를 처리한다. */
   async function handleDownloadSubmit(validDraft: DownloadDraft) {
-    clearDownloadResult();
     stopPolling();
+    setRequestError('');
+    setSubmitting(true);
 
     try {
       /** 새 다운로드 job polling 컨트롤러. */
@@ -165,169 +138,302 @@ export function App() {
       const apiBaseUrl = getApiBaseUrl();
 
       pollingAbortControllerRef.current = abortController;
-      setDownloadMessage('다운로드 작업을 만들고 있습니다.');
 
       /** 생성된 다운로드 job. */
-      const job: CreateDownloadJobResponse = await createDownloadJob(validDraft, {
+      const job = await createDownloadJob(validDraft, {
         apiBaseUrl,
         signal: abortController.signal,
       });
 
       setActiveJob(job);
-      setDownloadMessage(getJobStatusMessage(job));
+      setSubmitting(false);
 
-      /** ready 상태가 된 file endpoint URL. */
-      const fileUrl = await waitForDownloadJobFileUrl(job, {
+      /** terminal 상태까지 polling한 최종 job. */
+      const finalJob = await waitForDownloadJob(job, {
         apiBaseUrl,
         signal: abortController.signal,
-        onStatus: (snapshot) => {
-          setActiveJob(snapshot);
-          setDownloadMessage(getJobStatusMessage(snapshot));
-        },
+        onStatus: setActiveJob,
       });
 
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      setActiveJob(null);
+      setActiveJob(finalJob);
       stopPolling();
-      startBrowserDownload(fileUrl);
-      setDownloadMessage('브라우저 다운로드를 시작했습니다.');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
       }
 
-      setActiveJob(null);
-      setDownloadFailed(true);
-      setDownloadMessage('다운로드 요청에 실패했습니다. 잠시 후 다시 시도해주세요.');
-    }
-  }
-
-  /** 다운로드 job 취소 click 이벤트를 처리한다. */
-  async function handleCancelDownload() {
-    if (!activeJob) {
-      return;
-    }
-
-    stopPolling();
-
-    try {
-      /** 취소된 다운로드 job 상태. */
-      const canceledJob = await cancelDownloadJob(activeJob, {
-        apiBaseUrl: getApiBaseUrl(),
-      });
-
-      setActiveJob(canceledJob);
-      setDownloadMessage(canceledJob.message ?? '다운로드 작업을 취소했습니다.');
-    } catch {
-      setDownloadFailed(true);
-      setDownloadMessage('다운로드 취소에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      setSubmitting(false);
+      setRequestError('추출 요청에 실패했습니다. 다시 시도해 주세요.');
     }
   }
 
   return (
     <main className="app-shell">
       <section className="workspace" aria-labelledby="page-title">
-        <header className="loot-banner">
+        <header className="console-hero">
           <div className="brand-lockup">
-            <p className="brand-kicker">16-bit media extractor</p>
+            <p className="brand-kicker">PIXEL EXTRACTION CONSOLE</p>
             <h1 id="page-title" className="page-title">
-              MyTube Extract
+              MyTube <span>Extract</span>
             </h1>
-            <p className="hero-copy">이 영상은 이제 제 겁니다</p>
+            <p className="hero-copy">
+              YouTube URL을 제출하면 순서대로 파일을 준비합니다.
+            </p>
           </div>
           <div className="pixel-extractor" aria-hidden="true">
-            <span className="pixel pixel--arm" />
-            <span className="pixel pixel--claw" />
-            <span className="pixel pixel--capsule" />
+            <span className="extractor-rope" />
+            <span className="extractor-claw" />
+            <span className="extractor-screen" />
           </div>
         </header>
 
-        <p className="policy-strip">저작권 및 플랫폼 정책을 준수해 사용하세요.</p>
+        <div className="console-grid">
+          <section className="console-panel" aria-labelledby="request-title">
+            <div className="panel-title-row">
+              <h2 id="request-title">추출 요청</h2>
+              <span className="title-dots" aria-hidden="true" />
+            </div>
 
-        <section className={`status-card status-card--${statusTone}`} aria-labelledby="status-title">
-          <p id="status-title" className="status-label">
-            {statusLabel}
-          </p>
-          <p className="status-text" role="status">
-            {statusMessage}
-          </p>
-        </section>
+            <form
+              className="download-form"
+              onSubmit={handleSubmit(handleDownloadSubmit)}
+            >
+              <label className="field field--wide">
+                <span className="field-label">YouTube URL</span>
+                <input
+                  autoComplete="off"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  type="url"
+                  {...register('sourceUrl', { onChange: clearRequestError })}
+                />
+              </label>
 
-        <form className="download-form" onSubmit={handleSubmit(handleDownloadSubmit)}>
-          <label className="field field--wide">
-            <span className="field-label">추출 URL</span>
-            <span className="field-description">YouTube watch, Shorts, youtu.be URL을 붙여넣으세요.</span>
-            <input
-              autoComplete="off"
-              placeholder="https://www.youtube.com/watch?v=..."
-              type="url"
-              {...register('sourceUrl', { onChange: clearDownloadResult })}
-            />
-          </label>
+              <fieldset className="segmented-control">
+                <legend>추출 형식</legend>
+                <label
+                  className={
+                    draft.mode === 'audio' ? 'segment is-selected' : 'segment'
+                  }
+                >
+                  <input
+                    checked={draft.mode === 'audio'}
+                    type="radio"
+                    value="audio"
+                    {...register('mode', { onChange: handleModeChange })}
+                  />
+                  <span aria-hidden="true">♪</span>
+                  오디오 (MP3)
+                </label>
+                <label
+                  className={
+                    draft.mode === 'video' ? 'segment is-selected' : 'segment'
+                  }
+                >
+                  <input
+                    checked={draft.mode === 'video'}
+                    type="radio"
+                    value="video"
+                    {...register('mode', { onChange: handleModeChange })}
+                  />
+                  <span aria-hidden="true">▣</span>
+                  비디오 (MP4)
+                </label>
+              </fieldset>
 
-          <fieldset className="mode-group">
-            <legend>추출 형식</legend>
-            <label className={draft.mode === 'audio' ? 'mode-option is-selected' : 'mode-option'}>
-              <input
-                checked={draft.mode === 'audio'}
-                type="radio"
-                value="audio"
-                {...register('mode', { onChange: handleModeChange })}
-              />
-              <span aria-hidden="true">♪</span>
-              오디오
-            </label>
-            <label className={draft.mode === 'video' ? 'mode-option is-selected' : 'mode-option'}>
-              <input
-                checked={draft.mode === 'video'}
-                type="radio"
-                value="video"
-                {...register('mode', { onChange: handleModeChange })}
-              />
-              <span aria-hidden="true">▣</span>
-              비디오
-            </label>
-          </fieldset>
+              <fieldset className="quality-grid">
+                <legend>품질</legend>
+                {qualityOptions.map((option) => (
+                  <label
+                    className={
+                      draft.quality === option.value
+                        ? 'quality-chip is-selected'
+                        : 'quality-chip'
+                    }
+                    key={option.value}
+                  >
+                    <input
+                      type="radio"
+                      value={option.value}
+                      {...register('quality', { onChange: clearRequestError })}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </fieldset>
 
-          <label className="field">
-            <span className="field-label">파일명</span>
-            <span className="field-description">비워두면 서버 기본값을 사용합니다.</span>
-            <input
-              autoComplete="off"
-              placeholder="선택 입력"
-              type="text"
-              {...register('filename', { onChange: clearDownloadResult })}
-            />
-          </label>
-
-          <label className="field">
-            <span className="field-label">{qualityLabel}</span>
-            <span className="field-description">비워두면 서버가 기본 품질을 고릅니다.</span>
-            <input
-              inputMode="numeric"
-              min={1}
-              placeholder={qualityPlaceholder}
-              step={1}
-              type="number"
-              {...register('quality', { onChange: clearDownloadResult })}
-            />
-          </label>
-
-          <div className="button-row">
-            <button className="primary-button" disabled={!canSubmit} type="submit">
-              {isJobActive ? '준비 중' : '추출 시작'}
-            </button>
-            {isJobActive ? (
-              <button className="secondary-button" type="button" onClick={handleCancelDownload}>
-                취소
+              <button
+                className="primary-button"
+                disabled={!canSubmit}
+                type="submit"
+              >
+                {submitting ? '요청 중' : '추출 요청'}
               </button>
+            </form>
+
+            <div className="notice-box" role="note">
+              <span aria-hidden="true">i</span>
+              <p>즉시 다운로드가 아니라 작업 요청 방식입니다.</p>
+              <p>파일은 준비 후 일정 시간 뒤 삭제될 수 있습니다.</p>
+            </div>
+          </section>
+
+          <section
+            className="console-panel status-panel"
+            aria-labelledby="status-title"
+          >
+            <div className="panel-title-row panel-title-row--mint">
+              <h2 id="status-title">작업 현황</h2>
+              <span className="title-dots" aria-hidden="true" />
+            </div>
+
+            <div
+              className={`status-head status-head--${statusJob.displayStatus}`}
+            >
+              <span className="status-icon" aria-hidden="true">
+                ■
+              </span>
+              <div>
+                <h3>{statusTitle}</h3>
+                <p role="status">{statusMessage}</p>
+              </div>
+            </div>
+
+            <div className="step-tabs" aria-label="작업 단계">
+              {STATUS_ITEMS.map((item) => (
+                <span
+                  className={
+                    statusJob.displayStatus === item.key
+                      ? 'step-tab is-selected'
+                      : 'step-tab'
+                  }
+                  key={item.key}
+                >
+                  {item.label}
+                </span>
+              ))}
+            </div>
+
+            <div className="progress-meter" aria-label="진행률">
+              {Array.from({ length: 10 }).map((_, index) => (
+                <span
+                  className={index < filledProgressCells ? 'is-filled' : ''}
+                  key={index}
+                />
+              ))}
+            </div>
+            <p className="progress-label">
+              {statusJob.progress === null ? '--' : `${statusJob.progress}%`}
+            </p>
+
+            <dl className="status-details">
+              <div>
+                <dt>형식</dt>
+                <dd>{statusJob.type === 'audio' ? '오디오' : '비디오'}</dd>
+              </div>
+              <div>
+                <dt>품질</dt>
+                <dd>{formatQuality(statusJob)}</dd>
+              </div>
+              <div>
+                <dt>요청 시작</dt>
+                <dd>{createdTime}</dd>
+              </div>
+              <div>
+                <dt>보관 기간</dt>
+                <dd>완료 후 {statusJob.retentionDays}일</dd>
+              </div>
+            </dl>
+
+            {statusJob.downloadUrl ? (
+              <a
+                className="download-button"
+                download={createDownloadFileName(statusJob)}
+                href={buildApiUrl(statusJob.downloadUrl, getApiBaseUrl())}
+              >
+                다운로드
+              </a>
             ) : null}
-          </div>
-        </form>
+          </section>
+        </div>
+
+        <section className="legend-bar" aria-label="상태 안내">
+          <span>상태 안내</span>
+          <p>대기: 요청 접수</p>
+          <p>처리: 파일 추출 중</p>
+          <p>완료: 다운로드 가능</p>
+          <p>실패/만료: 재요청 필요</p>
+        </section>
       </section>
     </main>
   );
+}
+
+/** 빈 화면용 임시 상태 job을 만든다. */
+function createIdleJob(draft: DownloadDraft): DownloadResponse {
+  return {
+    createdAt: new Date().toISOString(),
+    displayStatus: 'queued',
+    downloadUrl: null,
+    errorCode: null,
+    jobId: '',
+    message: 'YouTube URL을 입력하고 추출을 요청해 주세요.',
+    progress: 0,
+    quality: draft.quality,
+    retentionDays: 7,
+    status: 'queued',
+    type: draft.mode,
+  };
+}
+
+/** 상태 제목을 만든다. */
+function createStatusTitle(job: DownloadResponse) {
+  if (job.displayStatus === 'queued') {
+    return '작업 대기 중입니다';
+  }
+
+  if (job.displayStatus === 'processing') {
+    return '파일을 추출 중입니다';
+  }
+
+  if (job.displayStatus === 'completed') {
+    return '파일이 준비되었습니다';
+  }
+
+  if (job.displayStatus === 'failed') {
+    return '추출에 실패했습니다';
+  }
+
+  return '보관 기간이 지났습니다';
+}
+
+/** 요청 시각을 HH:mm 형식으로 표시한다. */
+function formatTime(value: string) {
+  /** 날짜 파싱 결과. */
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '--:--';
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+/** 품질 표시값을 만든다. */
+function formatQuality(job: DownloadResponse) {
+  if (job.quality === 'default') {
+    return '기본값';
+  }
+
+  return job.type === 'audio' ? `${job.quality} kbps` : `${job.quality}p`;
+}
+
+/** 다운로드 링크에 전달할 기본 파일명을 만든다. */
+function createDownloadFileName(job: DownloadResponse) {
+  /** 추출 형식에 맞는 파일 확장자. */
+  const extension = job.type === 'audio' ? 'mp3' : 'mp4';
+
+  return `mytube-${job.jobId}.${extension}`;
 }

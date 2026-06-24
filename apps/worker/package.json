@@ -1,0 +1,25 @@
+{
+  "name": "worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local MyTube Extract FIFO worker.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --env-file-if-exists=.env -r ts-node/register src/main.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "lint": "tsc --noEmit",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "test": "node dist/worker.logic.spec.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@mytube-extract/db": "workspace:*",
+    "youtube-dl-exec": "3.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.21",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.3"
+  }
+}

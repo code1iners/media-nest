@@ -1,0 +1,23 @@
+{
+  "name": "@mytube-extract/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Prisma client for MyTube Extract.",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "prisma generate --schema prisma/schema.prisma && tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "format": "prisma format --schema prisma/schema.prisma && prettier --write \"src/**/*.ts\"",
+    "lint": "prisma generate --schema prisma/schema.prisma && tsc --noEmit",
+    "migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "test": "prisma generate --schema prisma/schema.prisma && tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3",
+    "typescript": "^5.1.3"
+  }
+}
