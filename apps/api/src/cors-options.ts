@@ -1,7 +1,10 @@
 import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 /** 운영 web app origin. */
-export const PRODUCTION_WEB_ORIGIN = 'https://mytube-extract-web.codeliners.cc';
+export const PRODUCTION_WEB_ORIGIN = 'https://mytube-extract.codeliners.cc';
+
+/** 이전 운영 web app origin. */
+const LEGACY_PRODUCTION_WEB_ORIGIN = 'https://mytube-extract-web.codeliners.cc';
 
 /** Browser client가 읽어야 하는 media response header. */
 const EXPOSED_MEDIA_HEADERS = ['Content-Disposition', 'Content-Type'] as const;
@@ -25,7 +28,7 @@ function createAllowedOrigins(options: CorsPolicyOptions = {}) {
   /** 현재 실행 환경. */
   const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
   /** 운영에서도 항상 허용할 origin 목록. */
-  const allowedOrigins = [PRODUCTION_WEB_ORIGIN];
+  const allowedOrigins = [PRODUCTION_WEB_ORIGIN, LEGACY_PRODUCTION_WEB_ORIGIN];
 
   if (nodeEnv !== 'production') {
     allowedOrigins.push(...LOCAL_WEB_ORIGINS);

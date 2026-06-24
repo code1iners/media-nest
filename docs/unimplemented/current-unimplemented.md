@@ -5,7 +5,7 @@
 - 상태: 미구현
 - 대상: `apps/api`, `apps/chrome-extension`
 - 필요성: Chrome Web Store 배포 후 확장 프로그램이 고정 origin을 보내는 경우 API가 해당 origin을 허용해야 한다.
-- 현재 상태: API CORS allowlist는 no-origin 요청, 운영 web origin `https://mytube-extract-web.codeliners.cc`, local preview/dev origin만 허용한다. 고정 extension ID를 모르는 상태라 `chrome-extension://{id}` origin은 허용하지 않는다.
+- 현재 상태: API CORS allowlist는 no-origin 요청, 운영 web origin `https://mytube-extract.codeliners.cc`, 이전 운영 web origin `https://mytube-extract-web.codeliners.cc`, local preview/dev origin만 허용한다. 고정 extension ID를 모르는 상태라 `chrome-extension://{id}` origin은 허용하지 않는다.
 - 구현 메모:
   - no-origin extension/download 요청 허용은 유지해야 한다.
   - Chrome Web Store 배포 ID가 확정되면 `chrome-extension://{id}` origin 허용 여부를 별도 테스트로 고정한다.

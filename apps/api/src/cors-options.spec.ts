@@ -6,6 +6,14 @@ describe('CORS options', () => {
       true,
     );
     expect(
+      isCorsOriginAllowed('https://mytube-extract.codeliners.cc', {
+        nodeEnv: 'production',
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps the legacy production web origin allowed in production', () => {
+    expect(
       isCorsOriginAllowed('https://mytube-extract-web.codeliners.cc', {
         nodeEnv: 'production',
       }),
