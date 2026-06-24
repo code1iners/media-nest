@@ -343,7 +343,7 @@ a {
   display: grid;
   min-height: 48px;
   align-items: center;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   width: 100%;
   border: 2px solid var(--border-strong);
   border-radius: 3px;
@@ -376,6 +376,25 @@ a {
 
 .field input:focus {
   outline: none;
+}
+
+.url-reset-button {
+  min-height: 32px;
+  margin-right: 8px;
+  border: 2px solid var(--border-muted);
+  border-radius: 3px;
+  background: var(--bg-panel-2);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 2px 0 var(--shadow-deep);
+}
+
+.url-reset-button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .segmented-control,

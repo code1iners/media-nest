@@ -88,6 +88,7 @@ export function App() {
   const {
     handleSubmit,
     register,
+    setFocus,
     setValue,
     watch,
     formState: { isValid },
@@ -170,6 +171,16 @@ export function App() {
       shouldDirty: true,
       shouldValidate: true,
     });
+  }
+
+  /** YouTube URL 입력값을 비우고 다시 입력할 수 있게 focus를 돌린다. */
+  function handleSourceUrlReset() {
+    clearRequestError();
+    setValue('sourceUrl', '', {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setFocus('sourceUrl');
   }
 
   /** 다운로드 실행 submit 이벤트를 처리한다. */
@@ -256,6 +267,14 @@ export function App() {
                     type="url"
                     {...register('sourceUrl', { onChange: clearRequestError })}
                   />
+                  <button
+                    className="url-reset-button"
+                    disabled={!draft.sourceUrl}
+                    type="button"
+                    onClick={handleSourceUrlReset}
+                  >
+                    리셋
+                  </button>
                 </span>
               </label>
 
