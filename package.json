@@ -8,7 +8,7 @@
   "packageManager": "pnpm@11.0.8",
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev --parallel --filter=web --filter=api",
     "dev:smoke": "pnpm --filter chrome-extension run test:browser:dev",
     "format": "turbo run format",
     "lint": "turbo run lint",
