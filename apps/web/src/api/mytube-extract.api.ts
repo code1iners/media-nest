@@ -8,6 +8,22 @@ import {
 /** fetch 호환 함수. */
 export type MyTubeExtractFetch = typeof fetch;
 
+/** 사용자에게 열람 가능한 오류 상세 정보. */
+export type UserVisibleErrorDetail = {
+  /** 오류 코드. */
+  code: string;
+  /** 오류 발생 위치. */
+  location: string;
+  /** 사용자 안내 문구. */
+  guidance: string;
+  /** 요청 경로. */
+  requestPath?: string;
+  /** 응답 상태 코드. */
+  responseStatus?: number;
+  /** 민감값을 제거한 응답 내용. */
+  responseBody?: string;
+};
+
 /** worker health API 응답. */
 export type WorkerHealthResponse = {
   /** API 프로세스 응답 가능 여부. */
@@ -66,7 +82,40 @@ export const DEFAULT_API_BASE_URL = import.meta.env.DEV
 export class WorkerUnavailableError extends Error {
   constructor() {
     super('Worker is unavailable.');
+    this.name = 'WorkerUnavailableError';
   }
+
+  /** 사용자에게 열람 가능한 오류 상세 정보. */
+  detail: UserVisibleErrorDetail = {
+    code: 'WORKER_UNAVAILABLE',
+    guidance: '추출 서버가 작업을 받을 수 없는 상태입니다.',
+    location: '서비스 상태 확인',
+    requestPath: '/health',
+  };
+}
+
+/** worker health 응답 형식 오류. */
+export class ServiceStatusFormatError extends Error {
+  constructor(input: {
+    /** 응답 상태 코드. */
+    responseStatus: number;
+    /** 민감값을 제거하기 전 응답 내용. */
+    responseBody: string;
+  }) {
+    super('Service status response format is invalid.');
+    this.name = 'ServiceStatusFormatError';
+    this.detail = {
+      code: 'SERVICE_STATUS_FORMAT_ERROR',
+      guidance: '서비스 상태 정보가 예상과 달라 요청을 진행할 수 없습니다.',
+      location: '서비스 상태 확인',
+      requestPath: '/health',
+      responseBody: sanitizeErrorText(input.responseBody),
+      responseStatus: input.responseStatus,
+    };
+  }
+
+  /** 사용자에게 열람 가능한 오류 상세 정보. */
+  detail: UserVisibleErrorDetail;
 }
 
 /** worker health를 조회한다. */
@@ -91,7 +140,28 @@ export async function getWorkerHealth(
     throw new Error('Worker health check failed.');
   }
 
-  return (await response.json()) as WorkerHealthResponse;
+  /** 응답 형식 검증 전 원문. */
+  const responseBody = await response.text();
+  /** JSON으로 파싱한 worker health 응답 후보. */
+  let health: unknown;
+
+  try {
+    health = JSON.parse(responseBody);
+  } catch {
+    throw new ServiceStatusFormatError({
+      responseBody,
+      responseStatus: response.status,
+    });
+  }
+
+  if (!isWorkerHealthResponse(health)) {
+    throw new ServiceStatusFormatError({
+      responseBody,
+      responseStatus: response.status,
+    });
+  }
+
+  return health;
 }
 
 /** MyTube Extract API 다운로드 job 생성 요청을 만든다. */
@@ -225,9 +295,35 @@ export function buildApiUrl(path: string, apiBaseUrl = DEFAULT_API_BASE_URL) {
 
 /** worker 사용 가능 여부를 검증한다. */
 export function assertWorkerAvailable(health: WorkerHealthResponse | undefined) {
-  if (health?.worker.available !== true) {
+  if (health?.worker?.available !== true) {
     throw new WorkerUnavailableError();
   }
+}
+
+/** worker health API 응답 형식을 확인한다. */
+function isWorkerHealthResponse(value: unknown): value is WorkerHealthResponse {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  /** worker health 응답 후보. */
+  const health = value as Partial<WorkerHealthResponse>;
+
+  return (
+    typeof health.ok === 'boolean' &&
+    !!health.worker &&
+    typeof health.worker.available === 'boolean'
+  );
+}
+
+/** 상세 원인에 표시할 텍스트에서 민감값과 과도한 길이를 줄인다. */
+function sanitizeErrorText(value: string) {
+  return value
+    .replace(
+      /"([^"]*(?:token|secret|password|key)[^"]*)"\s*:\s*"[^"]*"/gi,
+      '"$1":"[redacted]"',
+    )
+    .slice(0, 1000);
 }
 
 /** polling 간격만큼 대기한다. */

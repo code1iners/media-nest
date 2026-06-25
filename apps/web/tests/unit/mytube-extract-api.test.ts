@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ServiceStatusFormatError,
   WorkerUnavailableError,
   assertWorkerAvailable,
   buildCreateDownloadJobRequest,
@@ -69,6 +70,35 @@ describe('mytube extract api client', () => {
     });
   });
 
+  it('throws a displayable error when worker health omits worker state', async () => {
+    /** 이전 배포 health 응답 mock fetch. */
+    const fetcher = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+        status: 200,
+      });
+
+    await expect(
+      getWorkerHealth({
+        apiBaseUrl: 'https://mytube-extract.example/api',
+        fetcher,
+      }),
+    ).rejects.toMatchObject({
+      detail: {
+        code: 'SERVICE_STATUS_FORMAT_ERROR',
+        location: '서비스 상태 확인',
+        responseBody: '{"ok":true}',
+        responseStatus: 200,
+      },
+    });
+    await expect(
+      getWorkerHealth({
+        apiBaseUrl: 'https://mytube-extract.example/api',
+        fetcher,
+      }),
+    ).rejects.toBeInstanceOf(ServiceStatusFormatError);
+  });
+
   it('throws when worker health is unavailable', () => {
     expect(() =>
       assertWorkerAvailable({
@@ -76,6 +106,12 @@ describe('mytube extract api client', () => {
         worker: { available: false },
       }),
     ).toThrow(WorkerUnavailableError);
+  });
+
+  it('throws when worker health is missing', () => {
+    expect(() => assertWorkerAvailable(undefined)).toThrow(
+      WorkerUnavailableError,
+    );
   });
 
   it('polls until a terminal completed status', async () => {

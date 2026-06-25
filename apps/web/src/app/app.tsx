@@ -14,6 +14,7 @@ import {
   validateDownloadDraft,
 } from '../domain/download-request/download-request';
 import {
+  type UserVisibleErrorDetail,
   WorkerUnavailableError,
   assertWorkerAvailable,
   buildApiUrl,
@@ -21,11 +22,20 @@ import {
   getWorkerHealth,
   waitForDownloadJob,
 } from '../api/mytube-extract.api';
+import { ErrorDetailsDisclosure } from './error-details-disclosure';
 import { PixelExtractorArt, PixelIcon, type PixelIconName } from './pixel-art';
 
 /** worker 미가용 안내 문구. */
 const WORKER_UNAVAILABLE_MESSAGE =
-  '지금은 서비스 시간이 아니라 사용할 수 없습니다.';
+  '현재 추출 서버가 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.';
+
+/** worker 미가용 상세 원인. */
+const WORKER_UNAVAILABLE_DETAIL: UserVisibleErrorDetail = {
+  code: 'WORKER_UNAVAILABLE',
+  guidance: '추출 서버가 작업을 받을 수 없는 상태입니다.',
+  location: '서비스 상태 확인',
+  requestPath: '/health',
+};
 
 /** worker health query polling 간격. */
 const WORKER_HEALTH_REFETCH_INTERVAL_MS = 15_000;
@@ -118,6 +128,7 @@ export function App() {
     queryKey: ['worker-health', apiBaseUrl],
     queryFn: () => getWorkerHealth({ apiBaseUrl }),
     refetchInterval: WORKER_HEALTH_REFETCH_INTERVAL_MS,
+    retry: false,
   });
   /** 다운로드 job 생성 mutation. */
   const downloadJobMutation = useMutation({
@@ -157,25 +168,37 @@ export function App() {
     !!activeJob && !isTerminalStatus(activeJob.displayStatus);
   /** worker가 미가용 상태인지 여부. */
   const workerUnavailable =
-    workerHealthQuery.data?.worker.available === false;
+    workerHealthQuery.data?.worker?.available === false;
   /** worker health 확인에 실패했는지 여부. */
   const workerHealthFailed = workerHealthQuery.isError;
   /** worker health 확인 중인지 여부. */
   const workerHealthChecking = workerHealthQuery.isPending;
+  /** worker health 오류 상세 원인. */
+  const workerHealthErrorDetail = createWorkerHealthErrorDetail(
+    workerHealthQuery.error,
+  );
+  /** 현재 상태 패널 상세 원인. */
+  const statusErrorDetail = workerUnavailable
+    ? WORKER_UNAVAILABLE_DETAIL
+    : workerHealthErrorDetail;
   /** 추출 요청 가능 여부. */
   const canSubmit =
     validation.kind === 'ready' &&
     isValid &&
     !jobInProgress &&
     !downloadJobMutation.isPending &&
-    workerHealthQuery.data?.worker.available === true;
+    workerHealthQuery.data?.worker?.available === true;
   /** 오른쪽 status panel에 표시할 job. */
   const statusJob = activeJob ?? createIdleJob(draft);
   /** 10칸 진행률 bar 중 채울 칸 수. */
   const filledProgressCells =
     statusJob.progress === null ? 0 : Math.round(statusJob.progress / 10);
   /** 현재 상태 제목. */
-  const statusTitle = createStatusTitle(statusJob);
+  const statusTitle =
+    createWorkerHealthTitle({
+      failed: workerHealthFailed,
+      unavailable: workerUnavailable,
+    }) || createStatusTitle(statusJob);
   /** 현재 상태 문구. */
   const statusMessage =
     createWorkerHealthMessage({
@@ -189,7 +212,13 @@ export function App() {
   /** 요청 시작 시각 표시값. */
   const createdTime = formatTime(statusJob.createdAt);
   /** 현재 상태 아이콘 이름. */
-  const statusIconName = getStatusIconName(statusJob.displayStatus);
+  const statusIconName =
+    workerHealthFailed || workerUnavailable
+      ? 'failed'
+      : getStatusIconName(statusJob.displayStatus);
+  /** 현재 상태 표시 tone. */
+  const statusTone =
+    workerHealthFailed || workerUnavailable ? 'failed' : statusJob.displayStatus;
   /** 현재 진행률 표시 문구. */
   const progressLabel = createProgressLabel(statusJob);
 
@@ -216,6 +245,11 @@ export function App() {
     }
 
     setRequestError('');
+  }
+
+  /** worker health를 다시 확인한다. */
+  function retryWorkerHealth() {
+    void workerHealthQuery.refetch();
   }
 
   // Effects.
@@ -425,7 +459,7 @@ export function App() {
             </div>
 
             <div
-              className={`status-head status-head--${statusJob.displayStatus}`}
+              className={`status-head status-head--${statusTone}`}
             >
               <span className="status-icon" aria-hidden="true">
                 <PixelIcon name={statusIconName} />
@@ -435,6 +469,21 @@ export function App() {
                 <p role="status">{statusMessage}</p>
               </div>
             </div>
+
+            {workerHealthFailed ? (
+              <button
+                className="secondary-button"
+                disabled={workerHealthQuery.isFetching}
+                type="button"
+                onClick={retryWorkerHealth}
+              >
+                다시 확인
+              </button>
+            ) : null}
+
+            {statusErrorDetail ? (
+              <ErrorDetailsDisclosure detail={statusErrorDetail} />
+            ) : null}
 
             <div className="step-tabs" aria-label="작업 단계">
               {STATUS_ITEMS.map((item) => (
@@ -587,6 +636,24 @@ function createProgressLabel(job: DownloadResponse) {
   return `${job.progress}%`;
 }
 
+/** worker health 상태 제목을 만든다. */
+function createWorkerHealthTitle(input: {
+  /** worker health 확인 실패 여부. */
+  failed: boolean;
+  /** worker 미가용 여부. */
+  unavailable: boolean;
+}) {
+  if (input.unavailable) {
+    return '추출 기능을 사용할 수 없습니다';
+  }
+
+  if (input.failed) {
+    return '서비스 상태를 확인할 수 없습니다';
+  }
+
+  return '';
+}
+
 /** worker health 상태 문구를 만든다. */
 function createWorkerHealthMessage(input: {
   /** worker health 확인 실패 여부. */
@@ -609,6 +676,39 @@ function createWorkerHealthMessage(input: {
   }
 
   return '';
+}
+
+/** worker health 오류에서 사용자 열람용 상세 정보를 만든다. */
+function createWorkerHealthErrorDetail(
+  error: Error | null,
+): UserVisibleErrorDetail | undefined {
+  if (!error) {
+    return undefined;
+  }
+
+  if (hasUserVisibleErrorDetail(error)) {
+    return error.detail;
+  }
+
+  return {
+    code: 'SERVICE_STATUS_CHECK_FAILED',
+    guidance: '서비스 상태를 확인할 수 없습니다.',
+    location: '서비스 상태 확인',
+    requestPath: '/health',
+    responseBody: error.message,
+  };
+}
+
+/** 오류 객체가 사용자 열람용 상세 정보를 포함하는지 확인한다. */
+function hasUserVisibleErrorDetail(
+  error: unknown,
+): error is { detail: UserVisibleErrorDetail } {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'detail' in error &&
+    !!error.detail
+  );
 }
 
 /** 요청 시각을 HH:mm 형식으로 표시한다. */
