@@ -729,7 +729,7 @@ function formatTime(value: string) {
 /** 품질 표시값을 만든다. */
 function formatQuality(job: DownloadResponse) {
   if (job.quality === 'default') {
-    return '기본값';
+    return '최고 품질';
   }
 
   return job.type === 'audio' ? `${job.quality} kbps` : `${job.quality}p`;

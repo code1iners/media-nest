@@ -106,7 +106,7 @@ export const INITIAL_DOWNLOAD_DRAFT: DownloadDraft = {
 
 /** audio 품질 선택지. */
 export const AUDIO_QUALITY_OPTIONS = [
-  { label: '기본값', value: 'default' },
+  { label: '최고 품질', value: 'default' },
   { label: '128', value: '128' },
   { label: '192', value: '192' },
   { label: '320', value: '320' },
@@ -114,7 +114,7 @@ export const AUDIO_QUALITY_OPTIONS = [
 
 /** video 품질 선택지. */
 export const VIDEO_QUALITY_OPTIONS = [
-  { label: '기본값', value: 'default' },
+  { label: '최고 품질', value: 'default' },
   { label: '360', value: '360' },
   { label: '720', value: '720' },
   { label: '1080', value: '1080' },
