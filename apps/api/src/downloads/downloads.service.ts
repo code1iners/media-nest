@@ -71,6 +71,7 @@ export class DownloadsService {
             expiresAt: true,
             id: true,
             objectKey: true,
+            title: true,
           },
         },
       },
@@ -89,6 +90,7 @@ export class DownloadsService {
             expiresAt: true,
             id: true,
             objectKey: true,
+            title: true,
           },
         },
       },
@@ -112,6 +114,7 @@ export class DownloadsService {
             expiresAt: true,
             id: true,
             objectKey: true,
+            title: true,
           },
         },
       },
@@ -135,7 +138,7 @@ export class DownloadsService {
       job.asset.objectKey,
     );
     /** attachment로 내려줄 파일명. */
-    const fileName = createDownloadFileName(job.asset.objectKey);
+    const fileName = createDownloadFileName(job.asset, job.type);
 
     return {
       contentDisposition: createAttachmentDisposition(fileName),
@@ -185,9 +188,23 @@ export class DownloadsService {
   }
 }
 
-/** object key 마지막 segment를 다운로드 파일명으로 사용한다. */
-function createDownloadFileName(objectKey: string) {
-  return objectKey.split('/').filter(Boolean).pop() ?? 'download';
+/** title이 있으면 실제 영상 제목을, 없으면 object key 마지막 segment를 다운로드 파일명으로 사용한다. */
+function createDownloadFileName(
+  asset: NonNullable<JobWithAsset['asset']>,
+  type: ExtractionType,
+) {
+  /** 파일 확장자. */
+  const extension = type === ExtractionType.audio ? 'mp3' : 'mp4';
+  /** 파일명으로 쓸 수 있게 정리한 영상 제목. */
+  const safeTitle = sanitizeDownloadTitle(asset.title);
+
+  if (safeTitle) {
+    return `${safeTitle}.${extension}`;
+  }
+
+  return (
+    asset.objectKey.split('/').filter(Boolean).pop() ?? `download.${extension}`
+  );
 }
 
 /** 다운로드 파일 MIME type을 만든다. */
@@ -197,7 +214,51 @@ function createContentType(type: ExtractionType) {
 
 /** 브라우저가 inline 재생하지 않도록 attachment disposition을 만든다. */
 function createAttachmentDisposition(fileName: string) {
-  return `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  /** filename fallback은 quoted-string을 깨는 문자를 제거한 ASCII 안전값. */
+  const asciiFallback = createAsciiFallbackFileName(fileName);
+  /** RFC 5987 filename* 파라미터용 UTF-8 percent-encoded 파일명. */
+  const encodedFileName = encodeRFC5987ValueChars(fileName);
+
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedFileName}`;
+}
+
+/** Content-Disposition filename* 값에서 허용되지 않는 문자를 추가로 percent-encode한다. */
+function encodeRFC5987ValueChars(value: string) {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+/** 영상 제목을 다운로드 파일명으로 쓰기 전에 OS/HTTP에 위험한 문자를 정리한다. */
+function sanitizeDownloadTitle(title: string | null | undefined) {
+  return (
+    title
+      ?.replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^[. ]+|[. ]+$/g, '')
+      .slice(0, 120)
+      .trim()
+      .replace(/^[. ]+|[. ]+$/g, '') || ''
+  );
+}
+
+/** legacy filename 파라미터용 ASCII fallback을 만든다. */
+function createAsciiFallbackFileName(fileName: string) {
+  /** 확장자를 제외한 파일명 후보. */
+  const extension = fileName.match(/\.[A-Za-z0-9]+$/)?.[0] ?? '';
+  /** ASCII로 표현 가능한 base filename. */
+  const baseName = fileName
+    .slice(0, extension ? -extension.length : undefined)
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7e]/g, '_')
+    .replace(/["\\;]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[. _]+|[. _]+$/g, '')
+    .trim();
+
+  return `${baseName || 'download'}${extension}`;
 }
 
 /** 상태 기반 진행률을 만든다. */

@@ -7,6 +7,7 @@ import {
   createExpiresAt,
   createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
+  normalizeExtractedAssetTitle,
   parseEnvNumber,
 } from './worker.logic';
 
@@ -32,6 +33,11 @@ assert.equal(
   'attachment; filename="audio-192.mp3"; filename*=UTF-8\'\'audio-192.mp3',
 );
 assert.equal(parseEnvNumber('abc', 60_000), 60_000);
+assert.equal(
+  normalizeExtractedAssetTitle('  Never Gonna Give You Up  '),
+  'Never Gonna Give You Up',
+);
+assert.equal(normalizeExtractedAssetTitle('   '), null);
 assert.equal(
   createExpiresAt(7, new Date('2026-06-24T00:00:00.000Z')).toISOString(),
   '2026-07-01T00:00:00.000Z',

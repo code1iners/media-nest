@@ -35,6 +35,7 @@
 6. worker가 사용 가능하면 앱이 `POST /downloads`로 job을 만든다.
 7. 앱이 terminal 상태까지 `GET /downloads/:jobId`를 2500ms 간격으로 polling한다.
 8. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 다운로드 링크를 보여준다.
+9. 다운로드 파일명은 web 앱이 강제하지 않고 API의 `Content-Disposition` attachment 파일명을 따른다.
 
 worker 미가용 흐름:
 
@@ -100,6 +101,7 @@ worker 미가용 흐름:
 ### 완료 파일 링크
 
 API가 `downloadUrl`로 `/downloads/{jobId}/file` 같은 path를 주면 앱은 현재 API base URL과 결합한다.
+앱은 `download` 속성으로 별도 파일명을 지정하지 않는다. 새 추출 asset은 API가 실제 YouTube 영상 제목 기반 파일명을 내려주며, 제목이 없는 기존 asset은 API fallback 파일명을 사용한다.
 
 ## 상태 표시
 

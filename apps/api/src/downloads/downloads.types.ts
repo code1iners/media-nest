@@ -80,6 +80,8 @@ export type JobWithAsset = {
     id: string;
     /** R2 object key. */
     objectKey: string;
+    /** 원본 영상 제목. */
+    title: string | null;
     /** asset 만료 시각. */
     expiresAt: Date;
   } | null;

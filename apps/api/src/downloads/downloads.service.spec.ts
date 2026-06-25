@@ -91,6 +91,7 @@ describe('DownloadsService', () => {
         expiresAt: new Date('2026-07-01T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
+        title: 'Never Gonna Give You Up',
       },
       createdAt: new Date('2026-06-24T05:32:00.000Z'),
       errorCode: null,
@@ -172,6 +173,40 @@ describe('DownloadsService', () => {
         expiresAt: new Date('2026-07-01T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
+        title: 'Never Gonna Give You Up',
+      },
+      createdAt: new Date('2026-06-24T05:32:00.000Z'),
+      errorCode: null,
+      id: 'job-1',
+      quality: '192',
+      status: ExtractionJobStatus.completed,
+      type: ExtractionType.audio,
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+    });
+    r2StorageServiceMock.getObjectStream.mockResolvedValueOnce(stream);
+
+    await expect(service.getFile('job-1')).resolves.toMatchObject({
+      contentDisposition:
+        'attachment; filename="Never Gonna Give You Up.mp3"; filename*=UTF-8\'\'Never%20Gonna%20Give%20You%20Up.mp3',
+      contentType: 'audio/mpeg',
+      stream,
+    });
+    expect(r2StorageServiceMock.getObjectStream).toHaveBeenCalledWith(
+      'extracts/dQw4w9WgXcQ/audio-192.mp3',
+    );
+  });
+
+  it('falls back to the object key file name when a completed asset has no title', async () => {
+    /** R2 object stream mock. */
+    const stream = { pipe: jest.fn() };
+
+    prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
+      asset: {
+        expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+        id: 'asset-1',
+        objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
+        title: null,
       },
       createdAt: new Date('2026-06-24T05:32:00.000Z'),
       errorCode: null,
@@ -190,9 +225,36 @@ describe('DownloadsService', () => {
       contentType: 'audio/mpeg',
       stream,
     });
-    expect(r2StorageServiceMock.getObjectStream).toHaveBeenCalledWith(
-      'extracts/dQw4w9WgXcQ/audio-192.mp3',
-    );
+  });
+
+  it('percent-encodes RFC 5987 reserved characters in title download names', async () => {
+    /** R2 object stream mock. */
+    const stream = { pipe: jest.fn() };
+
+    prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
+      asset: {
+        expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+        id: 'asset-1',
+        objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
+        title: "Rock'n Roll (Live)",
+      },
+      createdAt: new Date('2026-06-24T05:32:00.000Z'),
+      errorCode: null,
+      id: 'job-1',
+      quality: '192',
+      status: ExtractionJobStatus.completed,
+      type: ExtractionType.audio,
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+    });
+    r2StorageServiceMock.getObjectStream.mockResolvedValueOnce(stream);
+
+    await expect(service.getFile('job-1')).resolves.toMatchObject({
+      contentDisposition:
+        "attachment; filename=\"Rock'n Roll (Live).mp3\"; filename*=UTF-8''Rock%27n%20Roll%20%28Live%29.mp3",
+      contentType: 'audio/mpeg',
+      stream,
+    });
   });
 
   it('marks completed jobs without assets as expired for the UI', async () => {

@@ -51,6 +51,18 @@ export function createContentDisposition(objectKey: string) {
   return `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 }
 
+/** yt-dlp에서 읽은 원본 제목을 DB에 저장 가능한 값으로 정리한다. */
+export function normalizeExtractedAssetTitle(title: unknown) {
+  if (typeof title !== 'string') {
+    return null;
+  }
+
+  /** 앞뒤 공백을 제거한 영상 제목. */
+  const normalizedTitle = title.trim();
+
+  return normalizedTitle || null;
+}
+
 /** 환경 숫자값을 기본값과 함께 읽는다. */
 export function parseEnvNumber(value: string | undefined, fallback: number) {
   /** 숫자로 변환한 환경 변수 값. */

@@ -167,8 +167,7 @@ export function App() {
   const jobInProgress =
     !!activeJob && !isTerminalStatus(activeJob.displayStatus);
   /** worker가 미가용 상태인지 여부. */
-  const workerUnavailable =
-    workerHealthQuery.data?.worker?.available === false;
+  const workerUnavailable = workerHealthQuery.data?.worker?.available === false;
   /** worker health 확인에 실패했는지 여부. */
   const workerHealthFailed = workerHealthQuery.isError;
   /** worker health 확인 중인지 여부. */
@@ -218,7 +217,9 @@ export function App() {
       : getStatusIconName(statusJob.displayStatus);
   /** 현재 상태 표시 tone. */
   const statusTone =
-    workerHealthFailed || workerUnavailable ? 'failed' : statusJob.displayStatus;
+    workerHealthFailed || workerUnavailable
+      ? 'failed'
+      : statusJob.displayStatus;
   /** 현재 진행률 표시 문구. */
   const progressLabel = createProgressLabel(statusJob);
 
@@ -458,9 +459,7 @@ export function App() {
               <span className="title-dots" aria-hidden="true" />
             </div>
 
-            <div
-              className={`status-head status-head--${statusTone}`}
-            >
+            <div className={`status-head status-head--${statusTone}`}>
               <span className="status-icon" aria-hidden="true">
                 <PixelIcon name={statusIconName} />
               </span>
@@ -536,7 +535,6 @@ export function App() {
             {statusJob.downloadUrl ? (
               <a
                 className="download-button"
-                download={createDownloadFileName(statusJob)}
                 href={buildApiUrl(statusJob.downloadUrl, getApiBaseUrl())}
               >
                 <PixelIcon name="download" />
@@ -704,10 +702,7 @@ function hasUserVisibleErrorDetail(
   error: unknown,
 ): error is { detail: UserVisibleErrorDetail } {
   return (
-    !!error &&
-    typeof error === 'object' &&
-    'detail' in error &&
-    !!error.detail
+    !!error && typeof error === 'object' && 'detail' in error && !!error.detail
   );
 }
 
@@ -733,12 +728,4 @@ function formatQuality(job: DownloadResponse) {
   }
 
   return job.type === 'audio' ? `${job.quality} kbps` : `${job.quality}p`;
-}
-
-/** 다운로드 링크에 전달할 기본 파일명을 만든다. */
-function createDownloadFileName(job: DownloadResponse) {
-  /** 추출 형식에 맞는 파일 확장자. */
-  const extension = job.type === 'audio' ? 'mp3' : 'mp4';
-
-  return `mytube-${job.jobId}.${extension}`;
 }

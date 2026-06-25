@@ -45,6 +45,7 @@ model ExtractedAsset {
   type      ExtractionType
   quality   String
   objectKey String
+  title     String?
   expiresAt DateTime
   createdAt DateTime        @default(now())
   jobs      ExtractionJob[]

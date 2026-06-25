@@ -1,4 +1,8 @@
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import {
   ExtractionJobStatus,
   ExtractionType,
@@ -9,7 +13,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { exec as youtubeExec } from 'youtube-dl-exec';
+import { exec as youtubeExec, youtubeDl } from 'youtube-dl-exec';
 import {
   createAssetObjectKey,
   createContentDisposition,
@@ -17,6 +21,7 @@ import {
   createExpiresAt,
   createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
+  normalizeExtractedAssetTitle,
   parseEnvNumber,
 } from './worker.logic';
 
@@ -197,6 +202,8 @@ async function processJob(job: Awaited<ReturnType<typeof claimNextJob>>) {
 
     /** R2 object key. */
     const objectKey = createAssetObjectKey(job.videoId, job.type, job.quality);
+    /** 원본 영상 제목. */
+    const title = await readExtractedAssetTitle(job.url);
     /** 추출 결과 임시 파일 경로. */
     const outputPath = await downloadJob(job);
 
@@ -215,12 +222,14 @@ async function processJob(job: Awaited<ReturnType<typeof claimNextJob>>) {
         expiresAt: createExpiresAt(ASSET_RETENTION_DAYS),
         objectKey,
         quality: job.quality,
+        title,
         type: job.type,
         videoId: job.videoId,
       },
       update: {
         expiresAt: createExpiresAt(ASSET_RETENTION_DAYS),
         objectKey,
+        title,
       },
       where: {
         videoId_type_quality: {
@@ -234,6 +243,27 @@ async function processJob(job: Awaited<ReturnType<typeof claimNextJob>>) {
     await markCompleted(job.id, asset.id);
   } catch (error) {
     await markFailed(job.id, 'EXTRACTION_FAILED', error);
+  }
+}
+
+/** yt-dlp metadata에서 원본 영상 제목을 best-effort로 읽는다. */
+async function readExtractedAssetTitle(url: string) {
+  try {
+    /** yt-dlp --get-title 출력값. */
+    const title = await youtubeDl(url, {
+      getTitle: true,
+      jsRuntimes: 'node',
+      noPlaylist: true,
+    });
+
+    return normalizeExtractedAssetTitle(title);
+  } catch (error) {
+    console.warn(
+      `Failed reading video title: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
   }
 }
 

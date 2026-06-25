@@ -30,6 +30,7 @@ Downloads 도메인은 URL 기반 오디오/비디오 다운로드를 PostgreSQL
 - `POST /downloads`: `type`, `url`, `quality` body를 받아 다운로드 job을 만든다.
 - `GET /downloads/:jobId`: job 상태를 조회한다.
 - `GET /downloads/:jobId/file`: `completed` job의 R2 asset을 attachment로 다운로드한다.
+- 새로 추출된 완료 파일은 가능한 경우 실제 YouTube 영상 제목을 기본 다운로드 파일명으로 사용한다.
 - DB 상태는 `queued`, `processing`, `completed`, `failed`를 사용하고, 만료된 완료 asset은 `displayStatus: "expired"`로 표시한다.
 - `quality`는 `default`, audio `128`/`192`/`320`, video `360`/`720`/`1080`만 허용한다.
 
