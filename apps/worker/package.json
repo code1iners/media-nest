@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "node --env-file-if-exists=.env -r ts-node/register src/main.ts",
+    "dev": "node --watch --env-file-if-exists=.env -r ts-node/register src/main.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "tsc --noEmit",
     "start": "node --env-file-if-exists=.env dist/main.js",

@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -8,14 +9,26 @@ import {
   type DownloadResponse,
   INITIAL_DOWNLOAD_DRAFT,
   VIDEO_QUALITY_OPTIONS,
-  buildApiUrl,
-  createDownloadJob,
   downloadDraftSchema,
   isTerminalStatus,
   validateDownloadDraft,
-  waitForDownloadJob,
 } from '../domain/download-request/download-request';
+import {
+  WorkerUnavailableError,
+  assertWorkerAvailable,
+  buildApiUrl,
+  createDownloadJob,
+  getWorkerHealth,
+  waitForDownloadJob,
+} from '../api/mytube-extract.api';
 import { PixelExtractorArt, PixelIcon, type PixelIconName } from './pixel-art';
+
+/** worker 미가용 안내 문구. */
+const WORKER_UNAVAILABLE_MESSAGE =
+  '지금은 서비스 시간이 아니라 사용할 수 없습니다.';
+
+/** worker health query polling 간격. */
+const WORKER_HEALTH_REFETCH_INTERVAL_MS = 15_000;
 
 /** 상태 표시 메타데이터. */
 const STATUS_ITEMS = [
@@ -68,14 +81,17 @@ const STATUS_LEGEND_ITEMS = [
 
 /** MyTube Extract Vite CSR web app. */
 export function App() {
+  // Variables.
+
+  /** 현재 API base URL. */
+  const apiBaseUrl = getApiBaseUrl();
+
   // States.
 
   /** 현재 생성되어 진행 중이거나 완료된 다운로드 job. */
   const [activeJob, setActiveJob] = useState<DownloadResponse | null>(null);
   /** 요청 실패 메시지. */
   const [requestError, setRequestError] = useState('');
-  /** job 생성 요청 진행 여부. */
-  const [submitting, setSubmitting] = useState(false);
 
   // Refs.
 
@@ -97,6 +113,35 @@ export function App() {
     mode: 'onChange',
     resolver: zodResolver(downloadDraftSchema),
   });
+  /** worker health query. */
+  const workerHealthQuery = useQuery({
+    queryKey: ['worker-health', apiBaseUrl],
+    queryFn: () => getWorkerHealth({ apiBaseUrl }),
+    refetchInterval: WORKER_HEALTH_REFETCH_INTERVAL_MS,
+  });
+  /** 다운로드 job 생성 mutation. */
+  const downloadJobMutation = useMutation({
+    mutationFn: async (input: {
+      /** 다운로드 입력값. */
+      draft: DownloadDraft;
+      /** 요청 중단 신호. */
+      signal: AbortSignal;
+    }) => {
+      /** submit 직전 최신 worker health. */
+      const workerHealth = await workerHealthQuery.refetch();
+
+      if (workerHealth.error) {
+        throw workerHealth.error;
+      }
+
+      assertWorkerAvailable(workerHealth.data);
+
+      return createDownloadJob(input.draft, {
+        apiBaseUrl,
+        signal: input.signal,
+      });
+    },
+  });
 
   // Computed.
 
@@ -110,9 +155,20 @@ export function App() {
   /** terminal 상태가 아닌 job 진행 여부. */
   const jobInProgress =
     !!activeJob && !isTerminalStatus(activeJob.displayStatus);
+  /** worker가 미가용 상태인지 여부. */
+  const workerUnavailable =
+    workerHealthQuery.data?.worker.available === false;
+  /** worker health 확인에 실패했는지 여부. */
+  const workerHealthFailed = workerHealthQuery.isError;
+  /** worker health 확인 중인지 여부. */
+  const workerHealthChecking = workerHealthQuery.isPending;
   /** 추출 요청 가능 여부. */
   const canSubmit =
-    validation.kind === 'ready' && isValid && !jobInProgress && !submitting;
+    validation.kind === 'ready' &&
+    isValid &&
+    !jobInProgress &&
+    !downloadJobMutation.isPending &&
+    workerHealthQuery.data?.worker.available === true;
   /** 오른쪽 status panel에 표시할 job. */
   const statusJob = activeJob ?? createIdleJob(draft);
   /** 10칸 진행률 bar 중 채울 칸 수. */
@@ -121,7 +177,15 @@ export function App() {
   /** 현재 상태 제목. */
   const statusTitle = createStatusTitle(statusJob);
   /** 현재 상태 문구. */
-  const statusMessage = requestError || statusJob.message || validation.message;
+  const statusMessage =
+    createWorkerHealthMessage({
+      failed: workerHealthFailed,
+      pending: workerHealthChecking,
+      unavailable: workerUnavailable,
+    }) ||
+    requestError ||
+    statusJob.message ||
+    validation.message;
   /** 요청 시작 시각 표시값. */
   const createdTime = formatTime(statusJob.createdAt);
   /** 현재 상태 아이콘 이름. */
@@ -187,24 +251,19 @@ export function App() {
   async function handleDownloadSubmit(validDraft: DownloadDraft) {
     stopPolling();
     setRequestError('');
-    setSubmitting(true);
 
     try {
       /** 새 다운로드 job polling 컨트롤러. */
       const abortController = new AbortController();
-      /** 현재 API base URL. */
-      const apiBaseUrl = getApiBaseUrl();
-
       pollingAbortControllerRef.current = abortController;
 
       /** 생성된 다운로드 job. */
-      const job = await createDownloadJob(validDraft, {
-        apiBaseUrl,
+      const job = await downloadJobMutation.mutateAsync({
+        draft: validDraft,
         signal: abortController.signal,
       });
 
       setActiveJob(job);
-      setSubmitting(false);
 
       /** terminal 상태까지 polling한 최종 job. */
       const finalJob = await waitForDownloadJob(job, {
@@ -220,8 +279,11 @@ export function App() {
         return;
       }
 
-      setSubmitting(false);
-      setRequestError('추출 요청에 실패했습니다. 다시 시도해 주세요.');
+      setRequestError(
+        error instanceof WorkerUnavailableError
+          ? WORKER_UNAVAILABLE_MESSAGE
+          : '추출 요청에 실패했습니다. 다시 시도해 주세요.',
+      );
     }
   }
 
@@ -337,7 +399,7 @@ export function App() {
                 type="submit"
               >
                 <PixelIcon name="download" />
-                {submitting ? '요청 중' : '추출 요청'}
+                {downloadJobMutation.isPending ? '요청 중' : '추출 요청'}
               </button>
             </form>
 
@@ -523,6 +585,30 @@ function createProgressLabel(job: DownloadResponse) {
   }
 
   return `${job.progress}%`;
+}
+
+/** worker health 상태 문구를 만든다. */
+function createWorkerHealthMessage(input: {
+  /** worker health 확인 실패 여부. */
+  failed: boolean;
+  /** worker health 첫 확인 진행 여부. */
+  pending: boolean;
+  /** worker 미가용 여부. */
+  unavailable: boolean;
+}) {
+  if (input.unavailable) {
+    return WORKER_UNAVAILABLE_MESSAGE;
+  }
+
+  if (input.failed) {
+    return '서버 상태를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (input.pending) {
+    return '서비스 상태를 확인 중입니다.';
+  }
+
+  return '';
 }
 
 /** 요청 시각을 HH:mm 형식으로 표시한다. */

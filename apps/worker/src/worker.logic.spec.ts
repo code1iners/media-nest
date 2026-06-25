@@ -5,6 +5,7 @@ import {
   createContentDisposition,
   createContentType,
   createExpiresAt,
+  createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
   parseEnvNumber,
 } from './worker.logic';
@@ -34,4 +35,19 @@ assert.equal(parseEnvNumber('abc', 60_000), 60_000);
 assert.equal(
   createExpiresAt(7, new Date('2026-06-24T00:00:00.000Z')).toISOString(),
   '2026-07-01T00:00:00.000Z',
+);
+assert.deepEqual(
+  createWorkerHeartbeatUpsertArgs(new Date('2026-06-25T00:00:00.000Z')),
+  {
+    create: {
+      id: 'default',
+      lastSeenAt: new Date('2026-06-25T00:00:00.000Z'),
+    },
+    update: {
+      lastSeenAt: new Date('2026-06-25T00:00:00.000Z'),
+    },
+    where: {
+      id: 'default',
+    },
+  },
 );

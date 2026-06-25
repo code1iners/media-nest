@@ -15,6 +15,7 @@ import {
   createContentDisposition,
   createContentType,
   createExpiresAt,
+  createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
   parseEnvNumber,
 } from './worker.logic';
@@ -40,6 +41,9 @@ const ASSET_RETENTION_DAYS = parseEnvNumber(
 /** Prisma client. */
 const prisma = new PrismaClient();
 
+/** worker heartbeat timer. */
+let heartbeatTimer: NodeJS.Timeout | null = null;
+
 /** R2 S3 compatible client. */
 const r2Client = new S3Client({
   credentials: {
@@ -55,6 +59,8 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
+  startHeartbeat();
+
   while (true) {
     await restoreStuckJobs();
 
@@ -67,6 +73,23 @@ async function main() {
     }
 
     await processJob(job);
+  }
+}
+
+/** 긴 job 처리 중에도 worker 생존 신호를 별도로 기록한다. */
+function startHeartbeat() {
+  void writeHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    void writeHeartbeat();
+  }, LOOP_INTERVAL_MS);
+}
+
+/** worker heartbeat row를 갱신한다. */
+async function writeHeartbeat() {
+  try {
+    await prisma.workerHeartbeat.upsert(createWorkerHeartbeatUpsertArgs());
+  } catch (error) {
+    console.error('Worker heartbeat update failed', error);
   }
 }
 
@@ -341,6 +364,10 @@ function sleep(ms: number) {
 
 /** 종료 signal 처리. */
 async function shutdown() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+  }
+
   await prisma.$disconnect();
   process.exit(0);
 }

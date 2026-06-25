@@ -27,9 +27,10 @@ COPY apps/web/package.json ./apps/web/package.json
 COPY apps/worker/package.json ./apps/worker/package.json
 COPY packages/db/package.json ./packages/db/package.json
 ARG YOUTUBE_DL_HOST
-RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm install --frozen-lockfile
+RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
+RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm rebuild --pending
 RUN pnpm --filter @mytube-extract/db run build
 RUN pnpm --filter worker run build
 RUN pnpm --filter worker deploy --prod --legacy /prod/worker

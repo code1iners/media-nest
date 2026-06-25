@@ -52,3 +52,9 @@ model ExtractedAsset {
   @@unique([videoId, type, quality])
   @@index([expiresAt])
 }
+
+model WorkerHeartbeat {
+  id         String   @id
+  lastSeenAt DateTime
+  updatedAt  DateTime @updatedAt
+}

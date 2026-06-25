@@ -15,7 +15,11 @@
     "test": "turbo run test",
     "test:cov": "turbo run test:cov",
     "test:e2e": "pnpm --filter api run test:e2e",
-    "verify:runtime": "turbo run verify:runtime"
+    "verify:runtime": "turbo run verify:runtime",
+    "worker:deploy": "docker compose up -d --build worker",
+    "worker:dev": "pnpm --filter worker run dev",
+    "worker:logs": "docker compose logs -f --tail=100 worker",
+    "worker:stop": "docker compose stop worker"
   },
   "pnpm": {
     "overrides": {

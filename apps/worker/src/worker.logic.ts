@@ -1,5 +1,8 @@
 import { ExtractionType } from '@mytube-extract/db';
 
+/** 단일 worker heartbeat row ID. */
+export const WORKER_HEARTBEAT_ID = 'default';
+
 /** worker에서 처리하는 품질 key. */
 export type WorkerQuality =
   | 'default'
@@ -61,4 +64,20 @@ export function parseEnvNumber(value: string | undefined, fallback: number) {
 /** 현재 시각 기준 보관 만료 시각을 계산한다. */
 export function createExpiresAt(retentionDays: number, now = new Date()) {
   return new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000);
+}
+
+/** worker heartbeat upsert 입력을 만든다. */
+export function createWorkerHeartbeatUpsertArgs(now = new Date()) {
+  return {
+    create: {
+      id: WORKER_HEARTBEAT_ID,
+      lastSeenAt: now,
+    },
+    update: {
+      lastSeenAt: now,
+    },
+    where: {
+      id: WORKER_HEARTBEAT_ID,
+    },
+  };
 }

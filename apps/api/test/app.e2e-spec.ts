@@ -30,6 +30,9 @@ describe('MyTubeExtract API (e2e)', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
     },
+    workerHeartbeat: {
+      findUnique: jest.fn(),
+    },
   };
 
   beforeAll(async () => {
@@ -52,6 +55,9 @@ describe('MyTubeExtract API (e2e)', () => {
     jobs = new Map();
     downloaderMock.download.mockResolvedValue(undefined);
     prismaMock.extractedAsset.findFirst.mockResolvedValue(null);
+    prismaMock.workerHeartbeat.findUnique.mockResolvedValue({
+      lastSeenAt: new Date(),
+    });
     prismaMock.extractionJob.create.mockImplementation(({ data }) => {
       /** 생성된 e2e job ID. */
       const id = `job-${jobs.size + 1}`;
@@ -81,7 +87,26 @@ describe('MyTubeExtract API (e2e)', () => {
     return request(app.getHttpServer())
       .get('/health')
       .expect(200)
-      .expect({ ok: true });
+      .expect({
+        ok: true,
+        worker: {
+          available: true,
+        },
+      });
+  });
+
+  it('/health returns worker unavailable without a heartbeat', () => {
+    prismaMock.workerHeartbeat.findUnique.mockResolvedValueOnce(null);
+
+    return request(app.getHttpServer())
+      .get('/health')
+      .expect(200)
+      .expect({
+        ok: true,
+        worker: {
+          available: false,
+        },
+      });
   });
 
   it('/health allows the production web origin and exposes media headers', async () => {
