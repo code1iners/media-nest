@@ -67,7 +67,8 @@ worker 미가용 흐름:
 - 지원 URL은 `youtube.com/watch`, `www.youtube.com/watch`, `youtu.be/{id}`, `youtube.com/shorts/{id}`, `www.youtube.com/shorts/{id}`다.
 - YouTube video ID는 11자 `[a-zA-Z0-9_-]` 형식이어야 한다.
 - `mode`는 `audio` 또는 `video`다.
-- `quality`는 `default`, `128`, `192`, `320`, `360`, `720`, `1080` 중 하나다.
+- `quality`는 audio `128`/`192`/`320`, video `360`/`720`/`1080` 중 하나다.
+- 초기 기본값은 `mode: "audio"`, `quality: "320"`이며, mode 변경 시 `quality`는 해당 mode 기본값(audio `"320"`, video `"1080"`)으로 재설정된다.
 
 ## API 호출 계약
 

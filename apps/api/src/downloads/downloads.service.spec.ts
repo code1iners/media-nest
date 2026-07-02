@@ -79,16 +79,73 @@ describe('DownloadsService', () => {
     );
   });
 
+  it('normalizes missing audio quality to 320', async () => {
+    prismaMock.extractedAsset.findFirst.mockResolvedValueOnce(null);
+    prismaMock.extractionJob.create.mockResolvedValueOnce({
+      asset: null,
+      createdAt: new Date('2026-06-24T05:32:00.000Z'),
+      errorCode: null,
+      id: 'job-1',
+      quality: '320',
+      status: ExtractionJobStatus.queued,
+      type: ExtractionType.audio,
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+    });
+
+    await service.create({
+      type: 'audio',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    });
+
+    expect(prismaMock.extractionJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          quality: '320',
+        }),
+      }),
+    );
+  });
+
+  it('normalizes legacy default video quality to 1080', async () => {
+    prismaMock.extractedAsset.findFirst.mockResolvedValueOnce(null);
+    prismaMock.extractionJob.create.mockResolvedValueOnce({
+      asset: null,
+      createdAt: new Date('2026-06-24T05:32:00.000Z'),
+      errorCode: null,
+      id: 'job-1',
+      quality: '1080',
+      status: ExtractionJobStatus.queued,
+      type: ExtractionType.video,
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+    });
+
+    await service.create({
+      quality: 'default',
+      type: 'video',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    });
+
+    expect(prismaMock.extractionJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          quality: '1080',
+        }),
+      }),
+    );
+  });
+
   it('creates a completed job when a reusable asset exists', async () => {
     prismaMock.extractedAsset.findFirst.mockResolvedValueOnce({
-      expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+      expiresAt: new Date('2026-07-08T05:32:00.000Z'),
       id: 'asset-1',
       objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
     });
     r2StorageServiceMock.objectExists.mockResolvedValueOnce(true);
     prismaMock.extractionJob.create.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: 'Never Gonna Give You Up',
@@ -119,7 +176,7 @@ describe('DownloadsService', () => {
 
   it('does not reuse stale asset rows when the object is missing', async () => {
     prismaMock.extractedAsset.findFirst.mockResolvedValueOnce({
-      expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+      expiresAt: new Date('2026-07-08T05:32:00.000Z'),
       id: 'asset-1',
       objectKey: 'extracts/rc5pL5-nS1o/audio-320.mp3',
     });
@@ -170,7 +227,7 @@ describe('DownloadsService', () => {
 
     prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: 'Never Gonna Give You Up',
@@ -203,7 +260,7 @@ describe('DownloadsService', () => {
 
     prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: null,
@@ -233,7 +290,7 @@ describe('DownloadsService', () => {
 
     prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-01T05:32:00.000Z'),
+        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: "Rock'n Roll (Live)",
@@ -294,6 +351,29 @@ describe('DownloadsService', () => {
     await expect(service.get('job-1')).resolves.toMatchObject({
       displayStatus: 'failed',
       errorCode: 'EXTRACTION_FAILED',
+      message: '추출에 실패했습니다. 다시 시도해 주세요.',
+      progress: null,
+    });
+  });
+
+  it('returns a specific message for large video failures', async () => {
+    prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
+      asset: null,
+      createdAt: new Date('2026-06-24T05:32:00.000Z'),
+      errorCode: 'VIDEO_TOO_LARGE',
+      id: 'job-1',
+      quality: '1080',
+      status: ExtractionJobStatus.failed,
+      type: ExtractionType.video,
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoId: 'dQw4w9WgXcQ',
+    });
+
+    await expect(service.get('job-1')).resolves.toMatchObject({
+      displayStatus: 'failed',
+      errorCode: 'VIDEO_TOO_LARGE',
+      message:
+        '파일 크기가 커서 현재 설정으로 처리할 수 없습니다. 낮은 화질로 다시 시도해 주세요.',
       progress: null,
     });
   });

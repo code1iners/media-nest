@@ -170,7 +170,7 @@ export class DownloadsService {
           ? ((job.errorCode ?? 'UNKNOWN') as DownloadResponse['errorCode'])
           : null,
       jobId: job.id,
-      message: createStatusMessage(displayStatus),
+      message: createStatusMessage(displayStatus, job.errorCode),
       progress: createProgress(displayStatus),
       quality: job.quality as DownloadResponse['quality'],
       retentionDays: this.getRetentionDays(),
@@ -279,7 +279,10 @@ function createProgress(status: DownloadResponse['displayStatus']) {
 }
 
 /** 상태별 사용자 표시 메시지. */
-function createStatusMessage(status: DownloadResponse['displayStatus']) {
+function createStatusMessage(
+  status: DownloadResponse['displayStatus'],
+  errorCode: string | null,
+) {
   if (status === ExtractionJobStatus.queued) {
     return '요청이 접수되어 대기 중입니다.';
   }
@@ -293,8 +296,29 @@ function createStatusMessage(status: DownloadResponse['displayStatus']) {
   }
 
   if (status === ExtractionJobStatus.failed) {
-    return '추출에 실패했습니다. 다시 시도해 주세요.';
+    return createFailureMessage(errorCode);
   }
 
   return '보관 기간이 지났습니다. 다시 추출해 주세요.';
+}
+
+/** 실패 코드별 사용자 안내 문구를 만든다. */
+function createFailureMessage(errorCode: string | null) {
+  if (errorCode === 'VIDEO_TOO_LARGE') {
+    return '파일 크기가 커서 현재 설정으로 처리할 수 없습니다. 낮은 화질로 다시 시도해 주세요.';
+  }
+
+  if (errorCode === 'YOUTUBE_AUTH_REQUIRED') {
+    return 'YouTube 인증 확인이 필요해 다운로드에 실패했습니다.';
+  }
+
+  if (errorCode === 'YOUTUBE_FORMAT_UNAVAILABLE') {
+    return '선택한 품질의 영상을 가져올 수 없습니다.';
+  }
+
+  if (errorCode === 'UPLOAD_FAILED') {
+    return '파일 업로드 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  return '추출에 실패했습니다. 다시 시도해 주세요.';
 }

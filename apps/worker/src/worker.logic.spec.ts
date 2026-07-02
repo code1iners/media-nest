@@ -5,6 +5,7 @@ import {
   createContentDisposition,
   createContentType,
   createExpiresAt,
+  createVideoPreflightDecision,
   createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
   normalizeExtractedAssetTitle,
@@ -20,12 +21,75 @@ assert.equal(
   'extracts/dQw4w9WgXcQ/video-720.mp4',
 );
 assert.equal(
-  createYtDlpFormat(ExtractionType.audio, 'default'),
-  'bestaudio/best',
+  createYtDlpFormat(ExtractionType.audio, '320'),
+  'bestaudio[abr<=320]/best',
+);
+assert.equal(
+  createYtDlpFormat(ExtractionType.video, '1080'),
+  'bestvideo[height<=1080]+bestaudio/best',
 );
 assert.equal(
   createYtDlpFormat(ExtractionType.video, '720'),
   'bestvideo[height<=720]+bestaudio/best',
+);
+assert.deepEqual(
+  createVideoPreflightDecision(
+    {
+      requested_formats: [
+        { filesize: 485_832_684, format_id: '399' },
+        { filesize: 205_557_300, format_id: '251' },
+      ],
+    },
+    1024 * 1024 * 1024,
+  ),
+  {
+    estimatedBytes: 691_389_984,
+    formatIds: ['399', '251'],
+    ok: true,
+  },
+);
+assert.deepEqual(
+  createVideoPreflightDecision(
+    {
+      requested_formats: [
+        { filesize: 2_201_425_722, format_id: '401' },
+        { filesize: 205_557_300, format_id: '251' },
+      ],
+    },
+    1024 * 1024 * 1024,
+  ),
+  {
+    errorCode: 'VIDEO_TOO_LARGE',
+    estimatedBytes: 2_406_983_022,
+    formatIds: ['401', '251'],
+    message: 'selected video is too large: 2406983022 bytes',
+    ok: false,
+  },
+);
+assert.deepEqual(createVideoPreflightDecision({}), {
+  errorCode: 'YOUTUBE_FORMAT_UNAVAILABLE',
+  estimatedBytes: null,
+  formatIds: [],
+  message: 'yt-dlp did not return selected video formats',
+  ok: false,
+});
+assert.deepEqual(
+  createVideoPreflightDecision(
+    {
+      requested_formats: [
+        { filesize: 485_832_684, format_id: '399' },
+        { format_id: '251' },
+      ],
+    },
+    1024 * 1024 * 1024,
+  ),
+  {
+    errorCode: 'YOUTUBE_FORMAT_UNAVAILABLE',
+    estimatedBytes: null,
+    formatIds: ['399', '251'],
+    message: 'yt-dlp selected video formats without complete size metadata',
+    ok: false,
+  },
 );
 assert.equal(createContentType(ExtractionType.audio), 'audio/mpeg');
 assert.equal(

@@ -203,7 +203,7 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 - `id`는 11자 YouTube 영상 ID 형식이어야 한다.
 - `resolution`과 `bitrate`는 양의 정수여야 한다.
 - `filename`에는 경로 구분자나 제어 문자를 넣을 수 없다.
-- `/downloads`의 `quality`는 `default`, audio `128`/`192`/`320`, video `360`/`720`/`1080`만 허용한다.
+- `/downloads`의 `quality`는 audio `128`/`192`/`320`, video `360`/`720`/`1080`만 허용한다. `quality`를 생략하거나 legacy `default`를 보내면 audio는 `320`, video는 `1080`으로 저장한다.
 
 다운로드 처리:
 
@@ -211,6 +211,7 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 - `youtube-dl-exec` 실행은 adapter 뒤에 격리되어 있고, 서비스는 오디오/비디오 포맷 선택만 담당한다.
 - 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 메시지를 사용한다. YouTube bot/auth 감지 실패는 인증 확인 필요 메시지로 구분한다.
 - `/downloads`는 PostgreSQL job table, worker FIFO polling, R2 asset 저장소를 사용한다.
+- worker는 비디오 다운로드 전 선택 format의 예상 크기를 확인하고, R2 업로드는 stream 기반 multipart upload로 처리한다.
 - 완료 asset은 보관 기간이 지나면 scheduler가 R2 object와 DB row를 정리한다.
 
 ## CORS

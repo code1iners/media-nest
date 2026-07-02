@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -10,6 +10,7 @@ import {
   INITIAL_DOWNLOAD_DRAFT,
   VIDEO_QUALITY_OPTIONS,
   downloadDraftSchema,
+  getDefaultDownloadQuality,
   isTerminalStatus,
   validateDownloadDraft,
 } from '../domain/download-request/download-request';
@@ -264,12 +265,16 @@ export function App() {
   // Handlers.
 
   /** 다운로드 형식 변경 이벤트를 처리한다. */
-  function handleModeChange() {
+  function handleModeChange(event: ChangeEvent<HTMLInputElement>) {
     clearRequestError();
-    setValue('quality', 'default', {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
+    setValue(
+      'quality',
+      getDefaultDownloadQuality(event.target.value as DownloadDraft['mode']),
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      },
+    );
   }
 
   /** YouTube URL 입력값을 비우고 다시 입력할 수 있게 focus를 돌린다. */
@@ -723,9 +728,5 @@ function formatTime(value: string) {
 
 /** 품질 표시값을 만든다. */
 function formatQuality(job: DownloadResponse) {
-  if (job.quality === 'default') {
-    return '최고 품질';
-  }
-
   return job.type === 'audio' ? `${job.quality} kbps` : `${job.quality}p`;
 }

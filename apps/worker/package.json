@@ -13,7 +13,8 @@
     "test": "node dist/worker.logic.spec.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/client-s3": "^3.1077.0",
+    "@aws-sdk/lib-storage": "^3.1077.0",
     "@mytube-extract/db": "workspace:*",
     "youtube-dl-exec": "3.1.8"
   },

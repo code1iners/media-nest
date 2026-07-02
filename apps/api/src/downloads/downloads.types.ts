@@ -7,18 +7,14 @@ export type DownloadDisplayStatus = ExtractionJobStatus | 'expired';
 export type DownloadErrorCode =
   | 'INVALID_URL'
   | 'EXTRACTION_FAILED'
+  | 'VIDEO_TOO_LARGE'
+  | 'YOUTUBE_AUTH_REQUIRED'
+  | 'YOUTUBE_FORMAT_UNAVAILABLE'
   | 'UPLOAD_FAILED'
   | 'UNKNOWN';
 
 /** 다운로드 품질 선택값. */
-export type DownloadQuality =
-  | 'default'
-  | '128'
-  | '192'
-  | '320'
-  | '360'
-  | '720'
-  | '1080';
+export type DownloadQuality = '128' | '192' | '320' | '360' | '720' | '1080';
 
 /** 다운로드 상태 API 응답. */
 export type DownloadResponse = {

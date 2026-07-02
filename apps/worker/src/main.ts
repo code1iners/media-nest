@@ -1,16 +1,13 @@
-import {
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
+import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import {
   ExtractionJobStatus,
   ExtractionType,
   Prisma,
   PrismaClient,
 } from '@mytube-extract/db';
-import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { exec as youtubeExec, youtubeDl } from 'youtube-dl-exec';
@@ -19,10 +16,12 @@ import {
   createContentDisposition,
   createContentType,
   createExpiresAt,
+  createVideoPreflightDecision,
   createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
   normalizeExtractedAssetTitle,
   parseEnvNumber,
+  WorkerFailureCode,
 } from './worker.logic';
 
 /** worker idle polling 간격. */
@@ -42,6 +41,12 @@ const ASSET_RETENTION_DAYS = parseEnvNumber(
   process.env.ASSET_RETENTION_DAYS,
   7,
 );
+
+/** R2 multipart upload part 크기. */
+const R2_UPLOAD_PART_SIZE_BYTES = 16 * 1024 * 1024;
+
+/** R2 multipart upload 동시 part 수. */
+const R2_UPLOAD_QUEUE_SIZE = 2;
 
 /** Prisma client. */
 const prisma = new PrismaClient();
@@ -242,7 +247,7 @@ async function processJob(job: Awaited<ReturnType<typeof claimNextJob>>) {
 
     await markCompleted(job.id, asset.id);
   } catch (error) {
-    await markFailed(job.id, 'EXTRACTION_FAILED', error);
+    await markFailed(job.id, getWorkerFailureCode(error), error);
   }
 }
 
@@ -276,6 +281,13 @@ async function downloadJob(job: {
   /** 품질 key. */
   quality: string;
 }) {
+  /** yt-dlp format selector. */
+  const format = createYtDlpFormat(job.type, job.quality);
+
+  if (job.type === ExtractionType.video) {
+    await assertVideoPreflight(job.url, format);
+  }
+
   /** 요청별 worker 임시 디렉터리. */
   const workDir = await mkdtemp(join(tmpdir(), `mytube-worker-${job.type}-`));
   /** 출력 파일 확장자. */
@@ -285,17 +297,24 @@ async function downloadJob(job: {
   /** ffmpeg 경로 환경 변수. */
   const ffmpegLocation = process.env.FFMPEG_LOCATION;
 
-  await youtubeExec(job.url, {
-    addMetadata: true,
-    format: createYtDlpFormat(job.type, job.quality),
-    ignoreErrors: true,
-    jsRuntimes: 'node',
-    output: outputPath,
-    ...(ffmpegLocation && existsSync(ffmpegLocation) ? { ffmpegLocation } : {}),
-    ...(job.type === ExtractionType.audio
-      ? { audioFormat: 'mp3' as const, extractAudio: true }
-      : { mergeOutputFormat: 'mp4' as const }),
-  });
+  try {
+    await youtubeExec(job.url, {
+      addMetadata: true,
+      format,
+      ignoreErrors: true,
+      jsRuntimes: 'node',
+      output: outputPath,
+      ...(ffmpegLocation && existsSync(ffmpegLocation)
+        ? { ffmpegLocation }
+        : {}),
+      ...(job.type === ExtractionType.audio
+        ? { audioFormat: 'mp3' as const, extractAudio: true }
+        : { mergeOutputFormat: 'mp4' as const }),
+    });
+  } catch (error) {
+    await rm(workDir, { force: true, recursive: true });
+    throw error;
+  }
 
   return outputPath;
 }
@@ -306,15 +325,19 @@ async function uploadObject(
   filePath: string,
   contentType: string,
 ) {
-  await r2Client.send(
-    new PutObjectCommand({
-      Body: await readFile(filePath),
+  await new Upload({
+    client: r2Client,
+    leavePartsOnError: false,
+    params: {
+      Body: createReadStream(filePath),
       Bucket: readRequiredEnv('R2_BUCKET'),
       ContentDisposition: createContentDisposition(objectKey),
       ContentType: contentType,
       Key: objectKey,
-    }),
-  );
+    },
+    partSize: R2_UPLOAD_PART_SIZE_BYTES,
+    queueSize: R2_UPLOAD_QUEUE_SIZE,
+  }).done();
 }
 
 /** 실제 R2 object가 존재하는지 확인한다. */
@@ -373,6 +396,58 @@ async function markFailed(jobId: string, errorCode: string, error: unknown) {
     },
     where: { id: jobId },
   });
+}
+
+/** video 다운로드 전 선택 format이 worker 처리 정책 안에 있는지 확인한다. */
+async function assertVideoPreflight(url: string, format: string) {
+  /** yt-dlp format selector가 적용된 metadata. */
+  const metadata = await youtubeDl(url, {
+    dumpSingleJson: true,
+    format,
+    jsRuntimes: 'node',
+    noPlaylist: true,
+  });
+  /** worker 처리 가능 여부. */
+  const decision = createVideoPreflightDecision(metadata);
+
+  if (!decision.ok) {
+    throw new WorkerJobFailure(decision.errorCode, decision.message);
+  }
+
+  console.log(
+    `Video preflight passed: formats=${decision.formatIds.join(',') || 'unknown'} estimatedBytes=${
+      decision.estimatedBytes ?? 'unknown'
+    }`,
+  );
+}
+
+/** worker job 실패 코드와 원인을 함께 전달하는 에러. */
+class WorkerJobFailure extends Error {
+  constructor(
+    /** DB에 저장할 실패 코드. */
+    readonly errorCode: WorkerFailureCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'WorkerJobFailure';
+  }
+}
+
+/** unknown error에서 DB에 저장할 실패 코드를 고른다. */
+function getWorkerFailureCode(error: unknown): WorkerFailureCode {
+  if (error instanceof WorkerJobFailure) {
+    return error.errorCode;
+  }
+
+  if (
+    error instanceof Error &&
+    (error.message.includes('Sign in to confirm you') ||
+      error.message.includes('LOGIN_REQUIRED'))
+  ) {
+    return 'YOUTUBE_AUTH_REQUIRED';
+  }
+
+  return 'EXTRACTION_FAILED';
 }
 
 /** 필수 환경 변수를 읽는다. */

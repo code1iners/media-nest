@@ -12,7 +12,7 @@ import type { DownloadDraft } from '../../src/domain/download-request/download-r
 /** 테스트용 기본 다운로드 입력값. */
 const baseDraft: DownloadDraft = {
   mode: 'audio',
-  quality: 'default',
+  quality: '320',
   sourceUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
 };
 

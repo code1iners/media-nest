@@ -32,14 +32,14 @@ Downloads 도메인은 URL 기반 오디오/비디오 다운로드를 PostgreSQL
 - `GET /downloads/:jobId/file`: `completed` job의 R2 asset을 attachment로 다운로드한다.
 - 새로 추출된 완료 파일은 가능한 경우 실제 YouTube 영상 제목을 기본 다운로드 파일명으로 사용한다.
 - DB 상태는 `queued`, `processing`, `completed`, `failed`를 사용하고, 만료된 완료 asset은 `displayStatus: "expired"`로 표시한다.
-- `quality`는 `default`, audio `128`/`192`/`320`, video `360`/`720`/`1080`만 허용한다.
+- `quality`는 audio `128`/`192`/`320`, video `360`/`720`/`1080`만 허용한다. 입력이 없거나 legacy `default`면 audio는 `320`, video는 `1080`으로 정규화한다.
 
 현재 한계와 주의사항:
 
 - worker는 한 번에 하나의 queued job을 FIFO로 처리한다.
 - 서버 재시작 후에도 job row는 남지만 사용자별 작업 이력 UI는 제공하지 않는다.
 - 진행률은 상태 기반 `0`, `50`, `100` 값만 제공한다.
-- 실패 메시지는 내부 임시 경로와 upstream 오류 원문을 숨기는 generic 메시지를 사용한다.
+- 실패 메시지는 내부 임시 경로와 upstream 오류 원문을 숨기되, 큰 영상, YouTube 인증 필요, format 선택 실패, 업로드 실패는 사용자용 메시지로 구분한다.
 
 ### Video
 

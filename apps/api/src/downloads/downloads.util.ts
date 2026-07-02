@@ -6,20 +6,16 @@ import { DownloadQuality } from './downloads.types';
 const YOUTUBE_VIDEO_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
 
 /** audio 품질 선택지. */
-const AUDIO_QUALITIES = new Set<DownloadQuality>([
-  'default',
-  '128',
-  '192',
-  '320',
-]);
+const AUDIO_QUALITIES = new Set<DownloadQuality>(['128', '192', '320']);
 
 /** video 품질 선택지. */
-const VIDEO_QUALITIES = new Set<DownloadQuality>([
-  'default',
-  '360',
-  '720',
-  '1080',
-]);
+const VIDEO_QUALITIES = new Set<DownloadQuality>(['360', '720', '1080']);
+
+/** audio 요청의 기본 품질. */
+const DEFAULT_AUDIO_QUALITY: DownloadQuality = '320';
+
+/** video 요청의 기본 품질. */
+const DEFAULT_VIDEO_QUALITY: DownloadQuality = '1080';
 
 /** 외부 입력 URL에서 지원하는 YouTube video ID를 추출한다. */
 export function parseYoutubeVideoId(inputUrl: string | undefined) {
@@ -69,8 +65,11 @@ export function parseDownloadQuality(
   type: ExtractionType,
   quality: string | number | undefined,
 ): DownloadQuality {
-  /** 입력이 없을 때 저장할 기본 품질 key. */
-  const normalizedQuality = String(quality ?? 'default') as DownloadQuality;
+  /** legacy default 또는 누락 입력을 type별 명시 품질로 바꾼다. */
+  const normalizedQuality =
+    quality === undefined || quality === 'default'
+      ? getDefaultQuality(type)
+      : (String(quality) as DownloadQuality);
   /** 현재 type에서 허용하는 품질 목록. */
   const allowedQualities =
     type === ExtractionType.audio ? AUDIO_QUALITIES : VIDEO_QUALITIES;
@@ -80,6 +79,13 @@ export function parseDownloadQuality(
   }
 
   return normalizedQuality;
+}
+
+/** type별 기본 품질을 반환한다. */
+function getDefaultQuality(type: ExtractionType): DownloadQuality {
+  return type === ExtractionType.audio
+    ? DEFAULT_AUDIO_QUALITY
+    : DEFAULT_VIDEO_QUALITY;
 }
 
 /** R2 object key를 만든다. */

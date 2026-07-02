@@ -4,14 +4,7 @@ import { z } from 'zod';
 export type DownloadMode = 'audio' | 'video';
 
 /** 다운로드 품질 key. */
-export type DownloadQuality =
-  | 'default'
-  | '128'
-  | '192'
-  | '320'
-  | '360'
-  | '720'
-  | '1080';
+export type DownloadQuality = '128' | '192' | '320' | '360' | '720' | '1080';
 
 /** 다운로드 job 상태. */
 export type DownloadJobStatus =
@@ -27,6 +20,9 @@ export type DownloadDisplayStatus = DownloadJobStatus | 'expired';
 export type DownloadErrorCode =
   | 'INVALID_URL'
   | 'EXTRACTION_FAILED'
+  | 'VIDEO_TOO_LARGE'
+  | 'YOUTUBE_AUTH_REQUIRED'
+  | 'YOUTUBE_FORMAT_UNAVAILABLE'
   | 'UPLOAD_FAILED'
   | 'UNKNOWN';
 
@@ -91,7 +87,7 @@ export const downloadDraftSchema = z.object({
   /** 다운로드 형식. */
   mode: z.enum(['audio', 'video']),
   /** 선택 품질 값. */
-  quality: z.enum(['default', '128', '192', '320', '360', '720', '1080']),
+  quality: z.enum(['128', '192', '320', '360', '720', '1080']),
 });
 
 /** 다운로드 요청 입력값. */
@@ -100,13 +96,12 @@ export type DownloadDraft = z.infer<typeof downloadDraftSchema>;
 /** 앱 초기 입력값. */
 export const INITIAL_DOWNLOAD_DRAFT: DownloadDraft = {
   mode: 'audio',
-  quality: 'default',
+  quality: '320',
   sourceUrl: '',
 };
 
 /** audio 품질 선택지. */
 export const AUDIO_QUALITY_OPTIONS = [
-  { label: '최고 품질', value: 'default' },
   { label: '128', value: '128' },
   { label: '192', value: '192' },
   { label: '320', value: '320' },
@@ -114,11 +109,15 @@ export const AUDIO_QUALITY_OPTIONS = [
 
 /** video 품질 선택지. */
 export const VIDEO_QUALITY_OPTIONS = [
-  { label: '최고 품질', value: 'default' },
   { label: '360', value: '360' },
   { label: '720', value: '720' },
   { label: '1080', value: '1080' },
 ] as const;
+
+/** 다운로드 형식별 기본 품질을 반환한다. */
+export function getDefaultDownloadQuality(mode: DownloadMode): DownloadQuality {
+  return mode === 'audio' ? '320' : '1080';
+}
 
 /** 다운로드 입력값을 검증한다. */
 export function validateDownloadDraft(
