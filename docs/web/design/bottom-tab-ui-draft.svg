@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1500" viewBox="0 0 900 1500">
+  <defs>
+    <pattern id="grid12" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#a9b4c7" stroke-opacity=".055" stroke-width="2"/>
+    </pattern>
+    <pattern id="grid6" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M8 0H0V8" fill="none" stroke="#a9b4c7" stroke-opacity=".03" stroke-width="1"/>
+    </pattern>
+    <filter id="pixelShadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="9" stdDeviation="0" flood-color="#050912"/>
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#000000" flood-opacity=".26"/>
+    </filter>
+    <style>
+      text {
+        font-family: Lana, "Courier New", monospace;
+        letter-spacing: 0;
+      }
+      .panel {
+        fill: #1d2637;
+        stroke: #a9b4c7;
+        stroke-width: 4;
+        filter: url(#pixelShadow);
+      }
+      .panel-inner {
+        fill: none;
+        stroke: #050912;
+        stroke-width: 4;
+      }
+      .muted { fill: #bac4d3; }
+      .weak { fill: #8592a8; }
+      .gold { fill: #ffc83d; }
+      .mint { fill: #62e88a; }
+      .white { fill: #f4f7fb; }
+      .label {
+        font-size: 26px;
+        font-weight: 900;
+      }
+      .body {
+        font-size: 24px;
+        font-weight: 800;
+      }
+      .small {
+        font-size: 20px;
+        font-weight: 800;
+      }
+      .title {
+        font-size: 56px;
+        font-weight: 950;
+      }
+    </style>
+  </defs>
+
+  <rect width="900" height="1500" fill="#090f1a"/>
+  <rect width="900" height="1500" fill="url(#grid12)"/>
+  <rect width="900" height="1500" fill="url(#grid6)"/>
+  <circle cx="650" cy="120" r="250" fill="#62e88a" opacity=".06"/>
+
+  <rect x="34" y="38" width="832" height="1424" rx="28" fill="#0b1220" stroke="#050912" stroke-width="8"/>
+  <rect x="52" y="56" width="796" height="1388" rx="18" fill="#090f1a" stroke="#293348" stroke-width="3"/>
+
+  <g transform="translate(74 82)">
+    <rect class="panel" width="752" height="178" rx="5"/>
+    <rect class="panel-inner" x="8" y="8" width="736" height="162" rx="2"/>
+    <rect x="630" y="30" width="74" height="18" fill="#111827" stroke="#050912" stroke-width="4"/>
+    <path d="M630 30h18v18h-18zM666 30h18v18h-18z" fill="#ffc83d"/>
+    <text x="34" y="66" class="small gold">PIXEL EXTRACTION CONSOLE</text>
+    <text x="34" y="130" class="title white">MyTube <tspan class="gold">Extract</tspan></text>
+    <g transform="translate(632 72)">
+      <rect x="0" y="0" width="68" height="68" fill="#2a3448" stroke="#aeb8c9" stroke-width="6"/>
+      <rect x="14" y="16" width="40" height="28" fill="#0b111e"/>
+      <path d="M28 22v18l16-9z" fill="#ffc83d"/>
+      <rect x="22" y="52" width="24" height="10" fill="#62e88a"/>
+    </g>
+  </g>
+
+  <g transform="translate(74 292)">
+    <rect class="panel" width="752" height="390" rx="5"/>
+    <rect class="panel-inner" x="8" y="8" width="736" height="374" rx="2"/>
+    <text x="30" y="56" class="label gold">▣ 추출 요청</text>
+    <line x1="30" x2="722" y1="86" y2="86" stroke="#43516a" stroke-width="4" stroke-dasharray="8 8"/>
+
+    <text x="34" y="136" class="body white">YouTube URL</text>
+    <rect x="34" y="158" width="684" height="70" rx="3" fill="#0b1220" stroke="#a9b4c7" stroke-width="4"/>
+    <rect x="42" y="166" width="668" height="54" fill="none" stroke="#050912" stroke-width="4"/>
+    <path d="M64 191h18v-18h20v18h18v20h-18v18h-20v-18h-18z" fill="#62e88a"/>
+    <text x="138" y="203" class="body muted">https://www.youtube.com/watch?v=...</text>
+
+    <text x="34" y="274" class="body white">추출 형식</text>
+    <rect x="34" y="298" width="328" height="62" rx="3" fill="#293344" stroke="#ffc83d" stroke-width="4"/>
+    <rect x="390" y="298" width="328" height="62" rx="3" fill="#293348" stroke="#43516a" stroke-width="4"/>
+    <g transform="translate(68 315)">
+      <rect x="0" y="0" width="36" height="28" fill="none" stroke="#ffc83d" stroke-width="4"/>
+      <path d="M14 6v16l14-8z" fill="#ffc83d"/>
+      <text x="58" y="25" class="body gold">비디오 (MP4)</text>
+    </g>
+    <g transform="translate(424 315)">
+      <path d="M0 30h10V10h14V0h10v30h-10V10h-14v20z" fill="#bac4d3"/>
+      <text x="58" y="25" class="body muted">오디오 (MP3)</text>
+    </g>
+  </g>
+
+  <g transform="translate(74 720)">
+    <rect class="panel" width="752" height="318" rx="5"/>
+    <rect class="panel-inner" x="8" y="8" width="736" height="302" rx="2"/>
+    <text x="30" y="56" class="label mint">▶ 영상 추출</text>
+    <line x1="30" x2="722" y1="86" y2="86" stroke="#43516a" stroke-width="4" stroke-dasharray="8 8"/>
+
+    <rect x="36" y="120" width="190" height="132" fill="#203049" stroke="#a9b4c7" stroke-width="4"/>
+    <rect x="48" y="132" width="166" height="108" fill="#87bff0"/>
+    <rect x="48" y="198" width="166" height="42" fill="#3a8e4b"/>
+    <rect x="80" y="176" width="88" height="52" rx="3" fill="#d84034" stroke="#050912" stroke-width="6"/>
+    <path d="M112 188v28l28-14z" fill="#f4f7fb"/>
+    <text x="258" y="142" class="label gold">비디오 다운로드</text>
+    <text x="258" y="190" class="small mint">선택된 형식</text>
+    <text x="258" y="224" class="body white">MP4 · 1080p</text>
+    <text x="258" y="268" class="small weak">영상과 오디오를 함께 추출합니다.</text>
+  </g>
+
+  <g transform="translate(74 1074)">
+    <rect class="panel" width="752" height="204" rx="5"/>
+    <rect class="panel-inner" x="8" y="8" width="736" height="188" rx="2"/>
+    <text x="30" y="58" class="label mint">▥ 작업 현황</text>
+    <rect x="36" y="92" width="680" height="74" fill="#111827" stroke="#43516a" stroke-width="4"/>
+    <g transform="translate(70 112)">
+      <rect x="0" y="0" width="34" height="12" fill="#ffc83d"/>
+      <rect x="6" y="12" width="22" height="28" fill="#ffc83d"/>
+      <rect x="0" y="40" width="34" height="12" fill="#ffc83d"/>
+    </g>
+    <text x="134" y="138" class="body white">대기 중</text>
+    <text x="260" y="138" class="small weak">URL 입력 후 추출을 시작하세요.</text>
+  </g>
+
+  <g transform="translate(74 1318)">
+    <rect x="0" y="0" width="752" height="96" rx="5" fill="#111827" stroke="#a9b4c7" stroke-width="4" filter="url(#pixelShadow)"/>
+    <rect x="0" y="0" width="376" height="96" rx="5" fill="#111827" stroke="#ffc83d" stroke-width="6"/>
+    <rect x="376" y="0" width="376" height="96" fill="#111827" stroke="#43516a" stroke-width="4"/>
+    <g transform="translate(82 28)">
+      <rect x="0" y="2" width="54" height="38" fill="none" stroke="#ffc83d" stroke-width="6"/>
+      <path d="M22 12v18l18-9z" fill="#ffc83d"/>
+      <rect x="54" y="12" width="20" height="18" fill="none" stroke="#ffc83d" stroke-width="6"/>
+      <text x="102" y="34" class="label gold">영상 추출</text>
+    </g>
+    <g transform="translate(464 28)" opacity=".78">
+      <rect x="0" y="0" width="58" height="42" fill="none" stroke="#bac4d3" stroke-width="6"/>
+      <rect x="12" y="14" width="12" height="6" fill="#bac4d3"/>
+      <rect x="32" y="14" width="14" height="6" fill="#bac4d3"/>
+      <rect x="12" y="28" width="34" height="6" fill="#bac4d3"/>
+      <path d="M18 42l-8 14h24z" fill="#bac4d3"/>
+      <text x="96" y="34" class="label muted">자막 추출</text>
+    </g>
+  </g>
+</svg>

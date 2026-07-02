@@ -9,6 +9,7 @@ export type PixelIconName =
   | 'link'
   | 'processing'
   | 'queued'
+  | 'subtitle'
   | 'video';
 
 /** 픽셀 아이콘 속성. */
@@ -115,6 +116,17 @@ function renderPixelIcon(name: PixelIconName) {
         <path d="M8 10h10v4H8zM4 14h4v8H4zM8 22h10v4H8zM16 18h4v4h-4z" />
         <path d="M14 6h10v4H14zM24 10h4v8h-4zM14 18h10v4H14zM12 10h4v4h-4z" />
         <path className="pixel-icon__shade" d="M10 16h12v4H10z" />
+      </>
+    );
+  }
+
+  if (name === 'subtitle') {
+    return (
+      <>
+        <path d="M4 6h24v18H4z" />
+        <path className="pixel-icon__cutout" d="M8 10h16v10H8z" />
+        <path d="M10 13h4v3h-4zM16 13h6v3h-6zM10 18h12v3H10z" />
+        <path d="M11 24h10v4H11zM14 28h4v2h-4z" />
       </>
     );
   }

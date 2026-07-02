@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import type { UserVisibleErrorDetail } from '../api/mytube-extract.api';
+import type { UserVisibleErrorDetail } from '../../api/mytube-extract.api';
 import { ErrorDetailsDisclosure } from './error-details-disclosure';
 
 /** ErrorBoundary props. */
@@ -58,8 +58,7 @@ export class ErrorBoundary extends Component<
                 <span className="title-dots" aria-hidden="true" />
               </div>
               <p role="alert">
-                일시적인 문제가 발생했습니다. 새로고침 후 다시 시도해
-                주세요.
+                일시적인 문제가 발생했습니다. 새로고침 후 다시 시도해 주세요.
               </p>
               <div className="error-actions">
                 <button
@@ -100,9 +99,6 @@ function hasUserVisibleErrorDetail(
   error: unknown,
 ): error is { detail: UserVisibleErrorDetail } {
   return (
-    !!error &&
-    typeof error === 'object' &&
-    'detail' in error &&
-    !!error.detail
+    !!error && typeof error === 'object' && 'detail' in error && !!error.detail
   );
 }

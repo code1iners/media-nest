@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import type { UserVisibleErrorDetail } from '../api/mytube-extract.api';
+import type { UserVisibleErrorDetail } from '../../api/mytube-extract.api';
 
 /** 상세 원인 Disclosure props. */
 type ErrorDetailsDisclosureProps = {
@@ -86,10 +86,7 @@ function formatErrorDetail(detail?: UserVisibleErrorDetail) {
   }
 
   /** 표시 가능한 상세 원인 행. */
-  const lines = [
-    `오류 코드: ${detail.code}`,
-    `발생 위치: ${detail.location}`,
-  ];
+  const lines = [`오류 코드: ${detail.code}`, `발생 위치: ${detail.location}`];
 
   if (detail.requestPath) {
     lines.push(`요청 주소: ${detail.requestPath}`);

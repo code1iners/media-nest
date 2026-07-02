@@ -1,5 +1,16 @@
 # MyTube Extract Current Unimplemented
 
+## Web 앱 자막 추출 기능
+
+- 상태: 미구현
+- 대상: `apps/web`, `apps/api`
+- 필요성: 사용자가 영상 파일이 아니라 자막 텍스트 또는 자막 파일을 추출해야 하는 요구를 지원해야 한다.
+- 현재 상태: Web 앱은 `/subtitles` route와 하단 탭 navigation만 제공한다. 화면은 `자막 추출`, `준비 중입니다.` placeholder이며 API 호출, form, 다운로드 흐름은 없다.
+- 구현 조건: 자막 추출 API 계약, 지원 소스 URL, 출력 형식, 언어 선택 정책을 먼저 결정한다.
+- 관련 근거:
+  - `apps/web/src/app/pages/subtitles-extract/page.tsx`
+  - `docs/web/routes/subtitles.md`
+
 ## 고정 extension ID 기반 CORS 허용
 
 - 상태: 미구현
