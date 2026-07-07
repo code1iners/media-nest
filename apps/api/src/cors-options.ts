@@ -13,8 +13,8 @@ const EXPOSED_MEDIA_HEADERS = ['Content-Disposition', 'Content-Type'] as const;
 const LOCAL_WEB_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  'http://localhost:5010',
+  'http://127.0.0.1:5010',
 ];
 
 /** CORS 정책 생성 입력값. */

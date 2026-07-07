@@ -21,6 +21,14 @@ enum ExtractionJobStatus {
   failed
 }
 
+enum SubtitleJobStatus {
+  queued
+  extracting_audio
+  transcribing
+  completed
+  failed
+}
+
 model ExtractionJob {
   id          String              @id @default(uuid()) @db.Uuid
   url         String
@@ -58,4 +66,23 @@ model WorkerHeartbeat {
   id         String   @id
   lastSeenAt DateTime
   updatedAt  DateTime @updatedAt
+}
+
+model SubtitleJob {
+  id                String            @id @default(uuid()) @db.Uuid
+  originalFileName  String
+  sourceObjectKey   String
+  sourceContentType String
+  sourceSizeBytes   Int
+  whisperModel      String            @default("base_en")
+  resultObjectKey   String?
+  status            SubtitleJobStatus @default(queued)
+  errorCode         String?
+  errorDetail       String?
+  startedAt         DateTime?
+  expiresAt         DateTime
+  createdAt         DateTime          @default(now())
+
+  @@index([status, createdAt])
+  @@index([expiresAt])
 }

@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
@@ -40,6 +41,31 @@ export class R2StorageService {
       new DeleteObjectCommand({
         Bucket: config.bucket,
         Key: objectKey,
+      }),
+    );
+  }
+
+  /** R2 object를 업로드한다. */
+  async putObject(input: {
+    /** 업로드할 byte 본문. */
+    body: Buffer | Readable;
+    /** 브라우저 다운로드 동작을 제어할 disposition. */
+    contentDisposition?: string;
+    /** 업로드할 object MIME type. */
+    contentType: string;
+    /** R2 object key. */
+    objectKey: string;
+  }) {
+    /** R2 설정. */
+    const config = this.getConfig();
+
+    await this.getClient(config).send(
+      new PutObjectCommand({
+        Body: input.body,
+        Bucket: config.bucket,
+        ContentDisposition: input.contentDisposition,
+        ContentType: input.contentType,
+        Key: input.objectKey,
       }),
     );
   }

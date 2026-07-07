@@ -1,15 +1,27 @@
 import assert from 'node:assert/strict';
-import { ExtractionType } from '@mytube-extract/db';
+import { ExtractionType, SubtitleJobStatus } from '@mytube-extract/db';
 import {
+  appendProcessOutputTail,
   createAssetObjectKey,
   createContentDisposition,
   createContentType,
   createExpiresAt,
+  createSubtitleContentType,
+  createSubtitleMessage,
+  createSubtitleProgress,
+  createSubtitleResultObjectKey,
+  createWhisperCliArgs,
+  createWhisperModelEnvName,
+  createWhisperSrtOutputPath,
   createVideoPreflightDecision,
   createWorkerHeartbeatUpsertArgs,
   createYtDlpFormat,
+  DEFAULT_SUBTITLE_AUDIO_MAX_BYTES,
+  normalizeSubtitleWorkerFailureCode,
+  normalizeWhisperSrt,
   normalizeExtractedAssetTitle,
   parseEnvNumber,
+  selectNextQueuedWorkerJob,
 } from './worker.logic';
 
 assert.equal(
@@ -95,6 +107,177 @@ assert.equal(createContentType(ExtractionType.audio), 'audio/mpeg');
 assert.equal(
   createContentDisposition('extracts/dQw4w9WgXcQ/audio-192.mp3'),
   'attachment; filename="audio-192.mp3"; filename*=UTF-8\'\'audio-192.mp3',
+);
+assert.equal(
+  createSubtitleResultObjectKey('job-1'),
+  'subtitles/job-1/english.srt',
+);
+assert.equal(
+  createSubtitleContentType(),
+  'application/x-subrip; charset=utf-8',
+);
+assert.equal(DEFAULT_SUBTITLE_AUDIO_MAX_BYTES, 536_870_912);
+assert.equal(appendProcessOutputTail('abc', 'def', 10), 'abcdef');
+assert.equal(appendProcessOutputTail('abc', 'def', 4), 'cdef');
+assert.deepEqual(
+  createWhisperCliArgs({
+    audioPath: '/tmp/audio.wav',
+    language: 'en',
+    modelPath: '/models/ggml-medium.en.bin',
+    outputBasePath: '/tmp/english',
+    threads: 4,
+  }),
+  [
+    '-m',
+    '/models/ggml-medium.en.bin',
+    '-f',
+    '/tmp/audio.wav',
+    '-l',
+    'en',
+    '-np',
+    '-osrt',
+    '-of',
+    '/tmp/english',
+    '-t',
+    '4',
+  ],
+);
+assert.deepEqual(
+  createWhisperCliArgs({
+    audioPath: '/tmp/audio.wav',
+    language: 'en',
+    modelPath: '/models/ggml-medium.en.bin',
+    outputBasePath: '/tmp/english',
+  }),
+  [
+    '-m',
+    '/models/ggml-medium.en.bin',
+    '-f',
+    '/tmp/audio.wav',
+    '-l',
+    'en',
+    '-np',
+    '-osrt',
+    '-of',
+    '/tmp/english',
+  ],
+);
+assert.equal(
+  createWhisperModelEnvName('base_en'),
+  'WHISPER_MODEL_BASE_EN_PATH',
+);
+assert.equal(
+  createWhisperModelEnvName('small_en'),
+  'WHISPER_MODEL_SMALL_EN_PATH',
+);
+assert.equal(createWhisperModelEnvName('large_en'), null);
+assert.equal(createWhisperSrtOutputPath('/tmp/english'), '/tmp/english.srt');
+assert.equal(
+  normalizeWhisperSrt('  1\n00:00:00,000 --> 00:00:01,000\nHello\n\n'),
+  '1\n00:00:00,000 --> 00:00:01,000\nHello\n',
+);
+assert.throws(() => normalizeWhisperSrt('   '), {
+  message: 'whisper.cpp generated an empty SRT file',
+});
+assert.equal(
+  normalizeSubtitleWorkerFailureCode('TRANSCRIPTION_FAILED'),
+  'TRANSCRIPTION_FAILED',
+);
+assert.equal(
+  normalizeSubtitleWorkerFailureCode('CLI_EXITED'),
+  'TRANSCRIPTION_FAILED',
+);
+assert.equal(createSubtitleProgress(SubtitleJobStatus.queued), 10);
+assert.equal(createSubtitleProgress(SubtitleJobStatus.extracting_audio), 40);
+assert.equal(createSubtitleProgress(SubtitleJobStatus.transcribing), 70);
+assert.equal(createSubtitleProgress(SubtitleJobStatus.completed), 100);
+assert.equal(createSubtitleProgress(SubtitleJobStatus.failed), null);
+assert.equal(
+  createSubtitleMessage(SubtitleJobStatus.transcribing),
+  '영어 자막을 생성하고 있습니다.',
+);
+assert.equal(
+  createSubtitleMessage(SubtitleJobStatus.failed, 'AUDIO_TOO_LARGE'),
+  '추출된 음성 파일이 커서 현재 설정으로 처리할 수 없습니다.',
+);
+assert.deepEqual(
+  selectNextQueuedWorkerJob({
+    downloadJob: {
+      createdAt: new Date('2026-07-07T00:00:20.000Z'),
+      id: 'download-1',
+    },
+    subtitleJob: {
+      createdAt: new Date('2026-07-07T00:00:10.000Z'),
+      id: 'subtitle-1',
+    },
+  }),
+  {
+    createdAt: new Date('2026-07-07T00:00:10.000Z'),
+    id: 'subtitle-1',
+    kind: 'subtitle',
+  },
+);
+assert.deepEqual(
+  selectNextQueuedWorkerJob({
+    downloadJob: {
+      createdAt: new Date('2026-07-07T00:00:10.000Z'),
+      id: 'download-1',
+    },
+    subtitleJob: {
+      createdAt: new Date('2026-07-07T00:00:20.000Z'),
+      id: 'subtitle-1',
+    },
+  }),
+  {
+    createdAt: new Date('2026-07-07T00:00:10.000Z'),
+    id: 'download-1',
+    kind: 'download',
+  },
+);
+assert.deepEqual(
+  selectNextQueuedWorkerJob({
+    downloadJob: {
+      createdAt: new Date('2026-07-07T00:00:10.000Z'),
+      id: 'download-1',
+    },
+    subtitleJob: {
+      createdAt: new Date('2026-07-07T00:00:10.000Z'),
+      id: 'subtitle-1',
+    },
+  }),
+  {
+    createdAt: new Date('2026-07-07T00:00:10.000Z'),
+    id: 'download-1',
+    kind: 'download',
+  },
+);
+assert.deepEqual(
+  selectNextQueuedWorkerJob({
+    downloadJob: null,
+    subtitleJob: {
+      createdAt: new Date('2026-07-07T00:00:10.000Z'),
+      id: 'subtitle-1',
+    },
+  }),
+  {
+    createdAt: new Date('2026-07-07T00:00:10.000Z'),
+    id: 'subtitle-1',
+    kind: 'subtitle',
+  },
+);
+assert.deepEqual(
+  selectNextQueuedWorkerJob({
+    downloadJob: {
+      createdAt: new Date('2026-07-07T00:00:10.000Z'),
+      id: 'download-1',
+    },
+    subtitleJob: null,
+  }),
+  {
+    createdAt: new Date('2026-07-07T00:00:10.000Z'),
+    id: 'download-1',
+    kind: 'download',
+  },
 );
 assert.equal(parseEnvNumber('abc', 60_000), 60_000);
 assert.equal(

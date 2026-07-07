@@ -7,6 +7,10 @@ describe('AssetCleanupService', () => {
       delete: jest.fn(),
       findMany: jest.fn(),
     },
+    subtitleJob: {
+      delete: jest.fn(),
+      findMany: jest.fn(),
+    },
   };
   /** R2 storage mock. */
   const r2StorageMock = {
@@ -30,6 +34,7 @@ describe('AssetCleanupService', () => {
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
       },
     ]);
+    prismaMock.subtitleJob.findMany.mockResolvedValueOnce([]);
 
     await expect(service.cleanupExpiredAssets()).resolves.toBe(1);
     expect(r2StorageMock.deleteObject).toHaveBeenCalledWith(
@@ -47,9 +52,32 @@ describe('AssetCleanupService', () => {
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
       },
     ]);
+    prismaMock.subtitleJob.findMany.mockResolvedValueOnce([]);
     r2StorageMock.deleteObject.mockRejectedValueOnce(new Error('r2 failed'));
 
     await expect(service.cleanupExpiredAssets()).resolves.toBe(1);
     expect(prismaMock.extractedAsset.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes expired subtitle source and result objects', async () => {
+    prismaMock.extractedAsset.findMany.mockResolvedValueOnce([]);
+    prismaMock.subtitleJob.findMany.mockResolvedValueOnce([
+      {
+        id: 'subtitle-job-1',
+        resultObjectKey: 'subtitles/subtitle-job-1/english.srt',
+        sourceObjectKey: 'subtitles/subtitle-job-1/source.mp4',
+      },
+    ]);
+
+    await expect(service.cleanupExpiredAssets()).resolves.toBe(1);
+    expect(r2StorageMock.deleteObject).toHaveBeenCalledWith(
+      'subtitles/subtitle-job-1/source.mp4',
+    );
+    expect(r2StorageMock.deleteObject).toHaveBeenCalledWith(
+      'subtitles/subtitle-job-1/english.srt',
+    );
+    expect(prismaMock.subtitleJob.delete).toHaveBeenCalledWith({
+      where: { id: 'subtitle-job-1' },
+    });
   });
 });

@@ -22,7 +22,7 @@ describe('CORS options', () => {
 
   it('rejects local and unknown web origins in production', () => {
     expect(
-      isCorsOriginAllowed('http://localhost:5173', { nodeEnv: 'production' }),
+      isCorsOriginAllowed('http://localhost:5010', { nodeEnv: 'production' }),
     ).toBe(false);
     expect(
       isCorsOriginAllowed('https://evil.example', { nodeEnv: 'production' }),
@@ -48,10 +48,10 @@ describe('CORS options', () => {
       isCorsOriginAllowed('http://127.0.0.1:3000', { nodeEnv: 'development' }),
     ).toBe(true);
     expect(
-      isCorsOriginAllowed('http://localhost:5173', { nodeEnv: 'test' }),
+      isCorsOriginAllowed('http://localhost:5010', { nodeEnv: 'test' }),
     ).toBe(true);
     expect(
-      isCorsOriginAllowed('http://127.0.0.1:5173', { nodeEnv: 'test' }),
+      isCorsOriginAllowed('http://127.0.0.1:5010', { nodeEnv: 'test' }),
     ).toBe(true);
   });
 

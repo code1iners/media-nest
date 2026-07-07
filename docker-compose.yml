@@ -1,16 +1,4 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    image: mytube-extract-api:latest
-    container_name: mytube-extract-api
-    restart: unless-stopped
-    env_file:
-      - docker-compose.env
-    ports:
-      - "127.0.0.1:3030:3030"
-
   worker:
     build:
       context: .
@@ -20,3 +8,5 @@ services:
     restart: unless-stopped
     env_file:
       - docker-compose.env
+    volumes:
+      - ${WHISPER_CPP_HOST_DIR:?Set WHISPER_CPP_HOST_DIR}:/whisper.cpp:ro

@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AudioModule } from './audio/audio.module';
 import { DownloadsModule } from './downloads/downloads.module';
 import { HealthModule } from './health/health.module';
+import { SubtitlesModule } from './subtitles/subtitles.module';
 import { VideoModule } from './video/video.module';
 
 @Module({
@@ -15,6 +16,7 @@ import { VideoModule } from './video/video.module';
     ScheduleModule.forRoot(),
     VideoModule,
     DownloadsModule,
+    SubtitlesModule,
     HealthModule,
     AudioModule,
   ],

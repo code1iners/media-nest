@@ -16,10 +16,10 @@
     "test:cov": "turbo run test:cov",
     "test:e2e": "pnpm --filter api run test:e2e",
     "verify:runtime": "turbo run verify:runtime",
-    "worker:deploy": "docker compose up -d --build worker",
+    "worker:deploy": "docker compose --env-file docker-compose.env up -d --build worker",
     "worker:dev": "pnpm --filter worker run dev",
-    "worker:logs": "docker compose logs -f --tail=100 worker",
-    "worker:stop": "docker compose stop worker"
+    "worker:logs": "docker compose --env-file docker-compose.env logs -f --tail=100 worker",
+    "worker:stop": "docker compose --env-file docker-compose.env stop worker"
   },
   "pnpm": {
     "overrides": {

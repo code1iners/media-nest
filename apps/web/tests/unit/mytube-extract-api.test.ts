@@ -4,8 +4,10 @@ import {
   WorkerUnavailableError,
   assertWorkerAvailable,
   buildCreateDownloadJobRequest,
+  createSubtitleJob,
   getWorkerHealth,
   waitForDownloadJob,
+  waitForSubtitleJob,
 } from '../../src/api/mytube-extract.api';
 import type { DownloadDraft } from '../../src/domain/download-request/download-request';
 
@@ -161,6 +163,105 @@ describe('mytube extract api client', () => {
     ).resolves.toMatchObject({
       displayStatus: 'completed',
       downloadUrl: '/downloads/job-1/file',
+    });
+  });
+
+  it('creates a subtitle job with multipart form data', async () => {
+    /** 업로드 요청 mock fetch. */
+    const fetcher = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(_url)).toBe(
+        'https://mytube-extract.example/api/subtitles/jobs',
+      );
+      expect(init?.method).toBe('POST');
+      expect(init?.body).toBeInstanceOf(FormData);
+      expect((init?.body as FormData).get('whisperModel')).toBe('small_en');
+
+      return new Response(
+        JSON.stringify({
+          createdAt: '2026-07-03T01:00:00.000Z',
+          displayStatus: 'queued',
+          downloadUrl: null,
+          errorCode: null,
+          fileName: 'sample-video.mp4',
+          jobId: 'subtitle-job-1',
+          message: '요청이 접수되어 대기 중입니다.',
+          progress: 10,
+          retentionDays: 7,
+          stage: 'queued',
+          status: 'queued',
+          whisperModel: 'small_en',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        },
+      );
+    };
+
+    await expect(
+      createSubtitleJob(
+        new File(['video'], 'sample-video.mp4', { type: 'video/mp4' }),
+        'small_en',
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+        },
+      ),
+    ).resolves.toMatchObject({
+      displayStatus: 'queued',
+      jobId: 'subtitle-job-1',
+    });
+  });
+
+  it('polls subtitle jobs until a terminal completed status', async () => {
+    /** status 조회 mock fetch. */
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify({
+          createdAt: '2026-07-03T01:00:00.000Z',
+          displayStatus: 'completed',
+          downloadUrl: '/subtitles/jobs/subtitle-job-1/file',
+          errorCode: null,
+          fileName: 'sample-video.mp4',
+          jobId: 'subtitle-job-1',
+          message: '영어 SRT가 준비되었습니다.',
+          progress: 100,
+          retentionDays: 7,
+          stage: 'completed',
+          status: 'completed',
+          whisperModel: 'base_en',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        },
+      );
+
+    await expect(
+      waitForSubtitleJob(
+        {
+          createdAt: '2026-07-03T01:00:00.000Z',
+          displayStatus: 'queued',
+          downloadUrl: null,
+          errorCode: null,
+          fileName: 'sample-video.mp4',
+          jobId: 'subtitle-job-1',
+          message: '요청이 접수되어 대기 중입니다.',
+          progress: 10,
+          retentionDays: 7,
+          stage: 'queued',
+          status: 'queued',
+          whisperModel: 'base_en',
+        },
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+          intervalMs: 0,
+        },
+      ),
+    ).resolves.toMatchObject({
+      displayStatus: 'completed',
+      downloadUrl: '/subtitles/jobs/subtitle-job-1/file',
     });
   });
 });

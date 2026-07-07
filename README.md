@@ -42,6 +42,13 @@ cp apps/chrome-extension/.env.example apps/chrome-extension/.env
 - `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: R2 S3 compatible storage 설정
 - `R2_PUBLIC_BASE_URL`: S3 API read fallback에 사용할 public object base URL
 - `ASSET_RETENTION_DAYS`: 추출 asset 보관 기간. 기본값은 `7`
+- `SUBTITLE_UPLOAD_MAX_BYTES`: 자막 원본 영상 업로드 최대 byte. 기본값은 `524288000`
+- `SUBTITLE_AUDIO_MAX_BYTES`: local Whisper 처리 보호용 추출 audio 최대 byte. 기본값은 `536870912`
+- `WHISPER_CLI_PATH`: worker가 실행할 `whisper.cpp` CLI binary 경로
+- `WHISPER_MODEL_BASE_EN_PATH`: 빠른 영어 SRT 생성용 `base.en` model 파일 경로
+- `WHISPER_MODEL_SMALL_EN_PATH`: 더 느리지만 정확도를 우선하는 `small.en` model 파일 경로
+- `WHISPER_THREADS`: `whisper.cpp` 실행 thread 수. 기본값은 `4`
+- `WHISPER_LANGUAGE`: 자막 생성 언어. CTA 1 기본값은 `en`
 - `WORKER_LOOP_INTERVAL_MS`: worker idle polling 간격. 기본값은 `5000`
 - `WORKER_PROCESSING_TIMEOUT_MS`: stuck processing job을 queued로 복구하는 기준. 기본값은 `3600000`
 - `MEDIA_DOWNLOAD_TIMEOUT_MS`: 다운로드 생성 타임아웃. 비워두면 기존처럼 제한하지 않음
@@ -79,47 +86,44 @@ pnpm turbo run lint
 pnpm turbo run test
 ```
 
-## Run With Docker
+## Run Worker With Docker
+
+로컬 개발에서는 API와 web은 Turborepo로 실행하고, worker만 Docker Compose로 실행한다.
 
 ```bash
-docker compose up -d --build
+pnpm dev
+pnpm worker:deploy
 ```
 
-상태 확인:
+API 상태 확인:
 
 ```bash
-docker compose ps
 curl http://127.0.0.1:3030/health
 ```
 
-응답:
-
-```json
-{
-  "ok": true
-}
-```
-
-API 런타임 의존성 확인:
+worker 상태 확인:
 
 ```bash
-docker compose run --rm api pnpm --dir apps/api run verify:runtime
+docker compose ps worker
 ```
-
-`/health`는 서버 프로세스 응답성만 확인한다. ffmpeg, `yt-dlp`, Node.js 버전 같은 미디어 처리 의존성은 `pnpm --dir apps/api run verify:runtime`으로 확인한다.
 
 로그 확인:
 
 ```bash
-docker compose logs -f --tail=100 api
-docker compose logs -f --tail=100 worker
+pnpm worker:logs
 ```
 
-재시작/종료:
+worker 재시작/종료:
 
 ```bash
-docker compose restart api worker
-docker compose down
+pnpm worker:deploy
+pnpm worker:stop
+```
+
+API 런타임 의존성 확인은 로컬 API 앱에서 실행한다.
+
+```bash
+pnpm --filter api run verify:runtime
 ```
 
 ## Update / Deploy
@@ -127,15 +131,15 @@ docker compose down
 ```bash
 git pull --ff-only
 pnpm --filter @mytube-extract/db run migrate:deploy
-docker compose up -d --build
-docker compose ps
+pnpm worker:deploy
+docker compose ps worker
 curl http://127.0.0.1:3030/health
 ```
 
 런타임 의존성 검증:
 
 ```bash
-docker compose run --rm api pnpm --dir apps/api run verify:runtime
+pnpm --filter api run verify:runtime
 ```
 
 ## Rollback / Recovery
@@ -145,7 +149,7 @@ docker compose run --rm api pnpm --dir apps/api run verify:runtime
 ```bash
 git log --oneline -5
 git checkout <known-good-commit>
-docker compose up -d --build
+pnpm worker:deploy
 curl -fsS http://127.0.0.1:3030/health
 ```
 
@@ -154,7 +158,7 @@ curl -fsS http://127.0.0.1:3030/health
 ```bash
 git checkout main
 git pull --ff-only
-docker compose up -d --build
+pnpm worker:deploy
 ```
 
 ## API
@@ -167,6 +171,21 @@ docker compose up -d --build
 POST /downloads
 GET /downloads/{JOB_ID}
 GET /downloads/{JOB_ID}/file
+```
+
+웹 앱용 영어 SRT 생성:
+
+```text
+POST /subtitles/jobs
+GET /subtitles/jobs/{JOB_ID}
+GET /subtitles/jobs/{JOB_ID}/file
+```
+
+`whisper.cpp` 모델은 자동 다운로드하지 않는다. Docker Compose 기준으로 아래 파일을 수동 준비한 뒤 `docker-compose.env`에 container 내부 경로를 지정한다.
+
+```text
+/whisper.cpp/models/ggml-base.en.bin
+/whisper.cpp/models/ggml-small.en.bin
 ```
 
 `POST /downloads` body:
@@ -211,6 +230,8 @@ GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 - `youtube-dl-exec` 실행은 adapter 뒤에 격리되어 있고, 서비스는 오디오/비디오 포맷 선택만 담당한다.
 - 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 메시지를 사용한다. YouTube bot/auth 감지 실패는 인증 확인 필요 메시지로 구분한다.
 - `/downloads`는 PostgreSQL job table, worker FIFO polling, R2 asset 저장소를 사용한다.
+- `/subtitles/jobs`는 로컬 영상 업로드를 R2에 저장하고 worker가 ffmpeg와 local `whisper.cpp` CLI로 영어 SRT를 생성한다.
+- worker는 다운로드와 자막 job을 구분하지 않고 `createdAt`이 빠른 queued job부터 하나씩 처리한다.
 - worker는 비디오 다운로드 전 선택 format의 예상 크기를 확인하고, R2 업로드는 stream 기반 multipart upload로 처리한다.
 - 완료 asset은 보관 기간이 지나면 scheduler가 R2 object와 DB row를 정리한다.
 
@@ -221,7 +242,7 @@ API CORS는 현재 호출 표면 기준 allowlist를 사용한다.
 - `Origin`이 없는 요청은 허용한다.
 - 운영 web origin `https://mytube-extract.codeliners.cc`는 허용한다.
 - 이전 운영 web origin `https://mytube-extract-web.codeliners.cc`도 전환 기간 호환을 위해 허용한다.
-- `NODE_ENV`가 production이 아니면 local preview/dev origin `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:5173`, `http://127.0.0.1:5173`을 허용한다.
+- `NODE_ENV`가 production이 아니면 local preview/dev origin `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:5010`, `http://127.0.0.1:5010`을 허용한다.
 - 그 외 browser origin은 CORS 응답 header를 받지 못한다.
 - `Content-Disposition`, `Content-Type`은 browser client가 읽을 수 있도록 expose한다.
 

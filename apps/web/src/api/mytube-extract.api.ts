@@ -4,6 +4,11 @@ import {
   downloadDraftSchema,
   isTerminalStatus,
 } from '../domain/download-request/download-request';
+import {
+  type SubtitleWhisperModel,
+  type SubtitleJobResponse,
+  isSubtitleTerminalStatus,
+} from '../domain/subtitle-request/subtitle-request';
 
 /** fetch 호환 함수. */
 export type MyTubeExtractFetch = typeof fetch;
@@ -47,6 +52,20 @@ export type WaitForDownloadJobOptions = {
   intervalMs?: number;
   /** 상태 변경 콜백. */
   onStatus?: (snapshot: DownloadResponse) => void;
+};
+
+/** 자막 job polling 옵션. */
+export type WaitForSubtitleJobOptions = {
+  /** API base URL. */
+  apiBaseUrl?: string;
+  /** 테스트에서 대체할 fetch 함수. */
+  fetcher?: MyTubeExtractFetch;
+  /** polling 중단 신호. */
+  signal?: AbortSignal;
+  /** polling 간격. */
+  intervalMs?: number;
+  /** 상태 변경 콜백. */
+  onStatus?: (snapshot: SubtitleJobResponse) => void;
 };
 
 /** 다운로드 job 생성 요청. */
@@ -215,6 +234,44 @@ export async function createDownloadJob(
   return (await response.json()) as DownloadResponse;
 }
 
+/** 자막 job을 생성한다. */
+export async function createSubtitleJob(
+  file: File,
+  whisperModel: SubtitleWhisperModel,
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: MyTubeExtractFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
+) {
+  /** multipart 요청 body. */
+  const body = new FormData();
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+
+  body.append('file', file);
+  body.append('whisperModel', whisperModel);
+
+  /** 자막 job 생성 응답. */
+  const response = await fetcher(
+    buildApiUrl('/subtitles/jobs', options.apiBaseUrl),
+    {
+      body,
+      method: 'POST',
+      signal: options.signal,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('Subtitle job create failed.');
+  }
+
+  return (await response.json()) as SubtitleJobResponse;
+}
+
 /** 다운로드 job 상태를 조회한다. */
 export async function getDownloadJob(
   jobId: string,
@@ -244,6 +301,35 @@ export async function getDownloadJob(
   return (await response.json()) as DownloadResponse;
 }
 
+/** 자막 job 상태를 조회한다. */
+export async function getSubtitleJob(
+  jobId: string,
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: MyTubeExtractFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
+) {
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** 자막 job 상태 응답. */
+  const response = await fetcher(
+    buildApiUrl(`/subtitles/jobs/${jobId}`, options.apiBaseUrl),
+    {
+      signal: options.signal,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('Subtitle job status failed.');
+  }
+
+  return (await response.json()) as SubtitleJobResponse;
+}
+
 /** 다운로드 job이 terminal 상태가 될 때까지 polling한다. */
 export async function waitForDownloadJob(
   job: DownloadResponse,
@@ -257,6 +343,25 @@ export async function waitForDownloadJob(
   while (!isTerminalStatus(snapshot.displayStatus)) {
     await wait(intervalMs, options.signal);
     snapshot = await getDownloadJob(snapshot.jobId, options);
+    options.onStatus?.(snapshot);
+  }
+
+  return snapshot;
+}
+
+/** 자막 job이 terminal 상태가 될 때까지 polling한다. */
+export async function waitForSubtitleJob(
+  job: SubtitleJobResponse,
+  options: WaitForSubtitleJobOptions = {},
+) {
+  /** polling 간격. */
+  const intervalMs = options.intervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  /** 현재 상태 snapshot. */
+  let snapshot = job;
+
+  while (!isSubtitleTerminalStatus(snapshot.displayStatus)) {
+    await wait(intervalMs, options.signal);
+    snapshot = await getSubtitleJob(snapshot.jobId, options);
     options.onStatus?.(snapshot);
   }
 
@@ -294,7 +399,9 @@ export function buildApiUrl(path: string, apiBaseUrl = DEFAULT_API_BASE_URL) {
 }
 
 /** worker 사용 가능 여부를 검증한다. */
-export function assertWorkerAvailable(health: WorkerHealthResponse | undefined) {
+export function assertWorkerAvailable(
+  health: WorkerHealthResponse | undefined,
+) {
   if (health?.worker?.available !== true) {
     throw new WorkerUnavailableError();
   }

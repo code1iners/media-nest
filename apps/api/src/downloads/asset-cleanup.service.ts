@@ -40,6 +40,35 @@ export class AssetCleanupService {
       }
     }
 
-    return expiredAssets.length;
+    /** 현재 시각 기준 만료된 subtitle job 목록. */
+    const expiredSubtitleJobs = await this.prisma.subtitleJob.findMany({
+      where: {
+        expiresAt: {
+          lte: new Date(),
+        },
+      },
+    });
+
+    for (const job of expiredSubtitleJobs) {
+      try {
+        await this.r2Storage.deleteObject(job.sourceObjectKey);
+
+        if (job.resultObjectKey) {
+          await this.r2Storage.deleteObject(job.resultObjectKey);
+        }
+
+        await this.prisma.subtitleJob.delete({
+          where: { id: job.id },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Expired subtitle cleanup failed: ${job.id} ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    return expiredAssets.length + expiredSubtitleJobs.length;
   }
 }

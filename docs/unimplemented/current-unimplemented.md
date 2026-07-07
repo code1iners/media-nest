@@ -1,14 +1,16 @@
 # MyTube Extract Current Unimplemented
 
-## Web 앱 자막 추출 기능
+## 자막 추출 후속 기능
 
 - 상태: 미구현
-- 대상: `apps/web`, `apps/api`
-- 필요성: 사용자가 영상 파일이 아니라 자막 텍스트 또는 자막 파일을 추출해야 하는 요구를 지원해야 한다.
-- 현재 상태: Web 앱은 `/subtitles` route와 하단 탭 navigation만 제공한다. 화면은 `자막 추출`, `준비 중입니다.` placeholder이며 API 호출, form, 다운로드 흐름은 없다.
-- 구현 조건: 자막 추출 API 계약, 지원 소스 URL, 출력 형식, 언어 선택 정책을 먼저 결정한다.
+- 대상: `apps/web`, `apps/api`, `apps/worker`
+- 필요성: 영어 SRT 생성 이후 한글 번역, 긴 영상 처리, 자막 편집, Whisper 모델 준비 자동화 같은 후속 요구를 지원할 수 있다.
+- 현재 상태: Web 앱은 `/subtitles`에서 로컬 `mp4`, `mov`, `webm` 파일을 받아 영어 SRT 생성 job을 요청하고, 완료된 영어 SRT 다운로드를 제공한다. 사용자는 `base.en`, `small.en` 모델을 선택할 수 있고 예상 처리 시간을 볼 수 있다. 한글 번역 버튼은 CTA 2 위치만 표시하고 비활성 상태다. worker는 사용자가 직접 준비한 `whisper.cpp` binary/model path를 사용하며, 긴 영상 audio chunking과 모델 자동 다운로드를 제공하지 않는다.
+- 구현 조건: 번역 API 계약, SRT 편집 여부, 긴 영상 chunking 정책, Whisper binary/model 배포 방식을 먼저 결정한다.
 - 관련 근거:
   - `apps/web/src/app/pages/subtitles-extract/page.tsx`
+  - `apps/api/src/subtitles/subtitles.controller.ts`
+  - `apps/worker/src/main.ts`
   - `docs/web/routes/subtitles.md`
 
 ## 고정 extension ID 기반 CORS 허용

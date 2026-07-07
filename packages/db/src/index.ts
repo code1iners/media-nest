@@ -3,4 +3,5 @@ export {
   ExtractionType,
   Prisma,
   PrismaClient,
+  SubtitleJobStatus,
 } from '../generated/client';
