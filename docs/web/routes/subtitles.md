@@ -61,9 +61,7 @@
 
 ## 미구현 범위
 
-- 한글 번역 CTA 2 동작
-- 자막 편집기
-- 긴 영상 audio chunking
+- `docs/unimplemented/current-unimplemented.md`
 
 ## 검증
 

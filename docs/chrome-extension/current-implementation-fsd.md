@@ -2,7 +2,7 @@
 
 ## 문서 기준
 
-이 문서는 Chrome 확장 프로그램이 MyTube Extract API 서버를 소비하는 방식과 현재 MVP의 한계를 정리한다. API 서버 자체의 요청/응답 계약은 `docs/api/current-implementation-fsd.md`를 기준으로 하며, 여기서는 확장 프로그램의 화면, 상태, 설정, API 호출 조합을 다룬다.
+이 문서는 Chrome 확장 프로그램이 MyTube Extract API 서버를 소비하는 방식과 현재 MVP의 한계를 정리한다. API 서버 자체의 요청/응답 상세 계약은 `docs/server/endpoints/*`를 기준으로 하며, 여기서는 확장 프로그램의 화면, 상태, 설정, API 호출 조합을 다룬다.
 
 ## 현재 소스 상태
 
@@ -152,7 +152,7 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 - `filename`, `bitrate`, `resolution` 설정값이 생성 URL에 반영된다.
 - API base URL은 `WXT_MYTUBE_EXTRACT_API_BASE_URL`을 사용하고 popup UI에서 바꿀 수 없다.
 - 서버가 꺼져 있거나 health check가 실패할 때 사용자에게 서버 미응답 상태를 보여준다.
-- `pnpm dev`는 API health와 WXT dev output manifest 준비 상태를 터미널에 표시하고, `http://localhost:3000/popup.html` 개발용 preview를 자동으로 열어 popup UI를 바로 볼 수 있게 해야 한다.
+- `pnpm --filter chrome-extension run dev`는 API health와 WXT dev output manifest 준비 상태를 터미널에 표시하고, `http://localhost:3000/popup.html` 개발용 preview를 자동으로 열어 popup UI를 바로 볼 수 있게 해야 한다.
 - 개발용 preview는 Chrome extension runtime이 없는 localhost 환경에서만 fake Chrome API를 설치하고, 실제 extension runtime에서는 기존 Chrome API를 그대로 사용해야 한다.
 - `pnpm dev:smoke`는 이미 실행 중인 WXT dev output `.output/chrome-mv3-dev`를 load unpacked로 열어 popup 렌더링을 빠르게 확인한다.
 - `pnpm --filter chrome-extension run build`가 WXT generated manifest, popup asset, 권한, icon 참조를 검증한다.

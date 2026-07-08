@@ -163,7 +163,7 @@ pnpm worker:deploy
 
 ## API
 
-자세한 API 제품 범위와 기능 계약은 `docs/api/current-implementation-prd.md`, `docs/api/current-implementation-fsd.md`를 기준으로 한다. Web 앱 계약은 `docs/web/current-implementation-prd.md`, `docs/web/current-implementation-fsd.md`를 기준으로 한다.
+문서 지도는 `docs/README.md`를 기준으로 한다. API endpoint별 현재 계약은 `docs/server/endpoints/*`, Web route 계약은 `docs/web/routes/*`를 source of truth로 둔다.
 
 웹 앱용 job 기반 다운로드:
 
@@ -176,7 +176,9 @@ GET /downloads/{JOB_ID}/file
 웹 앱용 영어 SRT 생성:
 
 ```text
-POST /subtitles/jobs
+POST /subtitles/uploads
+PUT {R2_PRESIGNED_UPLOAD_URL}
+POST /subtitles/uploads/complete
 GET /subtitles/jobs/{JOB_ID}
 GET /subtitles/jobs/{JOB_ID}/file
 ```
@@ -187,18 +189,6 @@ GET /subtitles/jobs/{JOB_ID}/file
 /whisper.cpp/models/ggml-base.en.bin
 /whisper.cpp/models/ggml-small.en.bin
 ```
-
-`POST /downloads` body:
-
-```json
-{
-  "type": "audio",
-  "url": "https://www.youtube.com/watch?v=...",
-  "quality": "192"
-}
-```
-
-응답은 `jobId`, `status`, `displayStatus`, `progress`, `downloadUrl`, `errorCode`, `message`를 반환한다. 상태는 `queued`, `processing`, `completed`, `failed`를 사용하며, 만료된 완료 asset은 `displayStatus: "expired"`로 표시한다. `downloadUrl`이 있으면 `GET /downloads/{JOB_ID}/file`로 attachment를 받을 수 있다.
 
 호환용 직접 비디오 다운로드:
 
@@ -216,37 +206,9 @@ GET /audio/{YOUTUBE_VIDEO_ID}
 GET /audio/{YOUTUBE_VIDEO_ID}?filename=sample&bitrate=320
 ```
 
-입력값 검증:
-
-- `/downloads`의 `url`은 지원하는 YouTube watch, Shorts, `youtu.be` URL이어야 한다.
-- `id`는 11자 YouTube 영상 ID 형식이어야 한다.
-- `resolution`과 `bitrate`는 양의 정수여야 한다.
-- `filename`에는 경로 구분자나 제어 문자를 넣을 수 없다.
-- `/downloads`의 `quality`는 audio `128`/`192`/`320`, video `360`/`720`/`1080`만 허용한다. `quality`를 생략하거나 legacy `default`를 보내면 audio는 `320`, video는 `1080`으로 저장한다.
-
-다운로드 처리:
-
-- 요청 검증, 다운로드 생성, HTTP 파일 전송은 분리된 경계에서 처리한다.
-- `youtube-dl-exec` 실행은 adapter 뒤에 격리되어 있고, 서비스는 오디오/비디오 포맷 선택만 담당한다.
-- 다운로드 실패와 파일 전송 실패 응답은 내부 임시 경로 또는 upstream 오류 원문을 노출하지 않는 메시지를 사용한다. YouTube bot/auth 감지 실패는 인증 확인 필요 메시지로 구분한다.
-- `/downloads`는 PostgreSQL job table, worker FIFO polling, R2 asset 저장소를 사용한다.
-- `/subtitles/jobs`는 로컬 영상 업로드를 R2에 저장하고 worker가 ffmpeg와 local `whisper.cpp` CLI로 영어 SRT를 생성한다.
-- worker는 다운로드와 자막 job을 구분하지 않고 `createdAt`이 빠른 queued job부터 하나씩 처리한다.
-- worker는 비디오 다운로드 전 선택 format의 예상 크기를 확인하고, R2 업로드는 stream 기반 multipart upload로 처리한다.
-- 완료 asset은 보관 기간이 지나면 scheduler가 R2 object와 DB row를 정리한다.
-
 ## CORS
 
-API CORS는 현재 호출 표면 기준 allowlist를 사용한다.
-
-- `Origin`이 없는 요청은 허용한다.
-- 운영 web origin `https://mytube-extract.codeliners.cc`는 허용한다.
-- 이전 운영 web origin `https://mytube-extract-web.codeliners.cc`도 전환 기간 호환을 위해 허용한다.
-- `NODE_ENV`가 production이 아니면 local preview/dev origin `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:5010`, `http://127.0.0.1:5010`을 허용한다.
-- 그 외 browser origin은 CORS 응답 header를 받지 못한다.
-- `Content-Disposition`, `Content-Type`은 browser client가 읽을 수 있도록 expose한다.
-
-Chrome extension ID를 모르는 상태이므로 `EXTENSION_ID` 기반 `chrome-extension://...` origin 허용은 현재 범위에서 제외한다.
+API CORS 현재 계약은 `docs/api/current-implementation-fsd.md`와 endpoint 문서를 기준으로 한다.
 
 ## Chrome Extension
 
@@ -260,9 +222,11 @@ Chrome 확장 프로그램의 제품 범위와 기능 계약은 `docs/chrome-ext
 
 ```bash
 pnpm dev
+pnpm worker:deploy
+pnpm --filter chrome-extension run dev
 ```
 
-`pnpm dev`는 API watch server, worker, web Vite dev server, WXT extension dev mode를 함께 실행한다. Extension dev task는 API `http://127.0.0.1:3030/health`와 WXT dev output `apps/chrome-extension/.output/chrome-mv3-dev/manifest.json` 준비 상태를 확인하고, 같은 API 주소를 `WXT_MYTUBE_EXTRACT_API_BASE_URL`로 popup build에 전달한다. 준비되면 개발용 popup preview를 자동으로 연다.
+`pnpm dev`는 root script 기준 API watch server와 web Vite dev server만 실행한다. Worker는 별도 shell에서 `pnpm worker:deploy`로 Docker Compose 실행한다. Chrome extension dev preview는 별도 shell에서 `pnpm --filter chrome-extension run dev`를 실행한다.
 
 개발 중 바로 보는 UI는 wrapper가 여는 popup preview server다. Preview에서도 사용자가 원본 URL을 직접 입력해 상태와 레이아웃을 확인한다.
 
@@ -280,13 +244,13 @@ WXT_MYTUBE_EXTRACT_API_BASE_URL=https://media-nest.codeliners.cc pnpm --filter c
 자동 open을 끄려면 아래처럼 실행한다.
 
 ```bash
-MYTUBE_EXTRACT_DEV_OPEN_PREVIEW=0 pnpm dev
+MYTUBE_EXTRACT_DEV_OPEN_PREVIEW=0 pnpm --filter chrome-extension run dev
 ```
 
 3000 port가 이미 사용 중이면 다른 preview port를 지정한다.
 
 ```bash
-MYTUBE_EXTRACT_PREVIEW_PORT=3002 pnpm dev
+MYTUBE_EXTRACT_PREVIEW_PORT=3002 pnpm --filter chrome-extension run dev
 ```
 
 개발 서버가 켜진 상태에서 popup이 실제로 load unpacked로 뜨는지 빠르게 확인:

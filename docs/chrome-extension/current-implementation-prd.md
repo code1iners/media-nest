@@ -10,7 +10,7 @@ MyTube Extract API 서버는 URL 또는 YouTube 영상 ID를 기반으로 오디
 
 Chrome 확장 프로그램 popup은 WXT + React + TypeScript로 구현되어 있다. Popup은 사용자가 입력하거나 현재 탭에서 가져온 YouTube URL, 추출 형식, 선택 옵션을 조합해 환경 변수로 정한 MyTube Extract API로 다운로드를 시작한다.
 
-API 서버 계약은 `docs/api/current-implementation-prd.md`와 `docs/api/current-implementation-fsd.md`를 기준으로 소비하며, 이번 범위에서는 서버 엔드포인트나 응답 계약을 변경하지 않는다.
+API 서버 제품 개요는 `docs/api/current-implementation-prd.md`, endpoint별 상세 계약은 `docs/server/endpoints/*`를 기준으로 소비하며, 이번 범위에서는 서버 엔드포인트나 응답 계약을 변경하지 않는다.
 
 ## User Stories
 

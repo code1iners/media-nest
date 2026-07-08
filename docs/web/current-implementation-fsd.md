@@ -2,7 +2,7 @@
 
 ## 문서 기준
 
-이 문서는 `apps/web` Vite CSR 앱이 MyTube Extract API를 소비하는 방식을 정리한다. API 요청/응답 상세 계약은 `docs/api/current-implementation-fsd.md`를 기준으로 한다.
+이 문서는 `apps/web` Vite CSR 앱이 MyTube Extract API를 소비하는 방식을 정리한다. Route별 상세 계약은 `docs/web/routes/*`, API 요청/응답 상세 계약은 `docs/server/endpoints/*`를 기준으로 한다.
 
 ## 현재 소스 상태
 
@@ -116,63 +116,19 @@ worker 미가용 흐름:
 
 ## API 호출 계약
 
-### `GET /health`
+Web 앱이 소비하는 endpoint 상세 계약은 아래 문서를 기준으로 한다.
 
-```json
-{
-  "ok": true,
-  "worker": {
-    "available": true
-  }
-}
-```
+- `docs/server/endpoints/get-health.md`
+- `docs/server/endpoints/post-downloads.md`
+- `docs/server/endpoints/get-downloads-job-id.md`
+- `docs/server/endpoints/get-downloads-job-id-file.md`
+- `docs/server/endpoints/post-subtitles-uploads.md`
+- `docs/server/endpoints/post-subtitles-uploads-complete.md`
+- `docs/server/endpoints/post-subtitles-uploads-abort.md`
+- `docs/server/endpoints/get-subtitles-jobs-job-id.md`
+- `docs/server/endpoints/get-subtitles-jobs-job-id-file.md`
 
-앱은 `worker.available`만 보고 추출 요청 가능 여부를 판단한다.
-
-### `POST /downloads`
-
-```json
-{
-  "type": "audio",
-  "url": "https://www.youtube.com/watch?v=...",
-  "quality": "192"
-}
-```
-
-### `GET /downloads/:jobId`
-
-앱은 API 응답의 `displayStatus`, `progress`, `message`, `retentionDays`, `downloadUrl`을 그대로 화면에 반영한다.
-
-### `POST /subtitles/uploads`
-
-앱은 선택한 로컬 영상 파일의 `fileName`, `contentType`, `sizeBytes`, `whisperModel`을 JSON body로 전송한다.
-API가 `413`을 반환하면 `SubtitleUploadTooLargeError`로 변환해 선택한 파일 크기와 `/subtitles/uploads` 요청 경로를 포함한 용량 초과 안내를 표시한다.
-
-### R2 presigned URL `PUT`
-
-앱은 `/subtitles/uploads` 응답의 `partSizeBytes` 기준으로 파일을 나누고, 각 `parts[].uploadUrl`에 `PUT`으로 직접 업로드한다. multipart complete에 필요한 `ETag` 응답 헤더를 읽기 때문에 운영 R2 CORS는 `ExposeHeaders: ETag`를 허용해야 한다.
-R2 업로드 실패나 `ETag` 미노출 실패는 `SubtitleDirectUploadFailedError`로 변환해 상태 패널의 상세 원인에 표시한다.
-
-### `POST /subtitles/uploads/complete`
-
-앱은 `objectKey`, `uploadId`, `uploadToken`, 업로드된 `{ partNumber, etag }` 배열을 전송하고 자막 job 응답을 받는다.
-
-### `POST /subtitles/uploads/abort`
-
-part upload 또는 complete 실패 시 앱은 best-effort로 upload session을 취소한다.
-
-### `POST /subtitles/jobs`
-
-legacy multipart 업로드 fallback이다. `subtitle-legacy-multipart-upload`로 deprecated 처리되어 기본 화면 흐름에서는 사용하지 않는다.
-
-### `GET /subtitles/jobs/:jobId`
-
-앱은 API 응답의 `displayStatus`, `stage`, `progress`, `message`, `retentionDays`, `downloadUrl`을 그대로 화면에 반영한다.
-
-### 완료 파일 링크
-
-API가 `downloadUrl`로 `/downloads/{jobId}/file` 또는 `/subtitles/jobs/{jobId}/file` 같은 path를 주면 앱은 현재 API base URL과 결합한다.
-앱은 `download` 속성으로 별도 파일명을 지정하지 않는다. 새 추출 asset과 SRT는 API가 `Content-Disposition` 파일명을 내려준다.
+Web 앱은 API 응답의 `displayStatus`, `progress`, `message`, `retentionDays`, `downloadUrl`을 화면 상태로 반영한다. API가 `downloadUrl` path를 주면 현재 API base URL과 결합하고, 파일명은 API의 `Content-Disposition` attachment 파일명을 따른다.
 
 ## 상태 표시
 
