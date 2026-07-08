@@ -71,10 +71,12 @@
 17. 사용자는 `base_en` 또는 `small_en` Whisper 모델을 선택한다. 기본값은 `base_en`이다.
 18. 앱은 선택한 영상 metadata에서 길이를 읽어 모델별 예상 처리 시간을 표시한다.
 19. `영어 SRT 생성`을 누르면 submit 직전 worker health를 다시 확인한다.
-20. worker가 사용 가능하면 앱이 `POST /subtitles/jobs`로 multipart job을 만든다.
-21. 앱이 terminal 상태까지 `GET /subtitles/jobs/:jobId`를 2500ms 간격으로 polling한다.
-22. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 영어 SRT 다운로드 링크를 보여준다.
-23. `한글로 번역` 버튼은 CTA 2 위치만 표시하고 비활성 상태로 둔다.
+20. worker가 사용 가능하면 앱이 `POST /subtitles/uploads`로 R2 direct upload session을 만든다.
+21. 앱이 session 응답의 presigned URL에 영상 file slice를 `PUT`으로 직접 업로드한다.
+22. 앱은 각 part 응답의 `ETag`를 모아 `POST /subtitles/uploads/complete`로 자막 job을 만든다.
+23. 앱이 terminal 상태까지 `GET /subtitles/jobs/:jobId`를 2500ms 간격으로 polling한다.
+24. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 영어 SRT 다운로드 링크를 보여준다.
+25. `한글로 번역` 버튼은 CTA 2 위치만 표시하고 비활성 상태로 둔다.
 
 worker 미가용 흐름:
 
@@ -141,9 +143,27 @@ worker 미가용 흐름:
 
 앱은 API 응답의 `displayStatus`, `progress`, `message`, `retentionDays`, `downloadUrl`을 그대로 화면에 반영한다.
 
+### `POST /subtitles/uploads`
+
+앱은 선택한 로컬 영상 파일의 `fileName`, `contentType`, `sizeBytes`, `whisperModel`을 JSON body로 전송한다.
+API가 `413`을 반환하면 `SubtitleUploadTooLargeError`로 변환해 선택한 파일 크기와 `/subtitles/uploads` 요청 경로를 포함한 용량 초과 안내를 표시한다.
+
+### R2 presigned URL `PUT`
+
+앱은 `/subtitles/uploads` 응답의 `partSizeBytes` 기준으로 파일을 나누고, 각 `parts[].uploadUrl`에 `PUT`으로 직접 업로드한다. multipart complete에 필요한 `ETag` 응답 헤더를 읽기 때문에 운영 R2 CORS는 `ExposeHeaders: ETag`를 허용해야 한다.
+R2 업로드 실패나 `ETag` 미노출 실패는 `SubtitleDirectUploadFailedError`로 변환해 상태 패널의 상세 원인에 표시한다.
+
+### `POST /subtitles/uploads/complete`
+
+앱은 `objectKey`, `uploadId`, `uploadToken`, 업로드된 `{ partNumber, etag }` 배열을 전송하고 자막 job 응답을 받는다.
+
+### `POST /subtitles/uploads/abort`
+
+part upload 또는 complete 실패 시 앱은 best-effort로 upload session을 취소한다.
+
 ### `POST /subtitles/jobs`
 
-앱은 `FormData`의 `file` 필드로 선택된 로컬 영상 파일을, `whisperModel` 필드로 선택한 `base_en` 또는 `small_en` 값을 전송한다.
+legacy multipart 업로드 fallback이다. `subtitle-legacy-multipart-upload`로 deprecated 처리되어 기본 화면 흐름에서는 사용하지 않는다.
 
 ### `GET /subtitles/jobs/:jobId`
 
@@ -169,6 +189,8 @@ API가 `downloadUrl`로 `/downloads/{jobId}/file` 또는 `/subtitles/jobs/{jobId
 - subtitle UI step `file_select`: 파일 선택 전 표시 전용 단계
 - worker unavailable: 추출 기능 사용 불가 안내
 - service status format error: 서비스 상태 확인 실패 안내와 상세 원인 보기
+- subtitle direct upload: R2 업로드 진행률, 실패 안내, 상세 원인 보기
+- subtitle upload too large: 선택한 파일 크기를 포함한 용량 초과 안내
 - unexpected render error: 화면 오류 안내와 상세 원인 보기
 
 ## 검증 기준

@@ -19,7 +19,8 @@
   - `ASSET_RETENTION_DAYS`: 완료 asset 보관 기간. 설정하지 않으면 기본 7일
   - `WORKER_HEARTBEAT_STALE_MS`: API가 worker heartbeat를 사용 가능 상태로 인정하는 시간
   - `WORKER_LOOP_INTERVAL_MS`, `WORKER_PROCESSING_TIMEOUT_MS`: worker polling과 stuck processing job 복구 기준
-  - `SUBTITLE_UPLOAD_MAX_BYTES`: API가 허용하는 자막 원본 영상 업로드 최대 byte. 설정하지 않으면 500MiB
+  - `SUBTITLE_UPLOAD_MAX_BYTES`: 자막 원본 영상 업로드 최대 byte. R2 direct upload metadata 검증과 legacy multipart 업로드 검증에 함께 사용한다. 설정하지 않으면 500MiB
+  - `SUBTITLE_UPLOAD_TOKEN_SECRET`: R2 direct upload session token 서명 secret. 설정하지 않으면 `R2_SECRET_ACCESS_KEY`를 fallback으로 사용한다.
   - `SUBTITLE_AUDIO_MAX_BYTES`: worker의 local Whisper 처리 보호용 추출 audio 최대 byte. 설정하지 않으면 512MiB
   - `WHISPER_CLI_PATH`: worker가 실행할 `whisper.cpp` CLI binary 경로
   - `WHISPER_MODEL_BASE_EN_PATH`: `base_en` 선택 시 worker가 사용할 `base.en` model 파일 경로
@@ -39,15 +40,110 @@
 
 ## Subtitles
 
-### `POST /subtitles/jobs`
+### `POST /subtitles/uploads`
 
-로컬 영상 파일을 업로드하고 영어 SRT 생성 job을 만든다.
+로컬 영상 파일 metadata를 받아 브라우저가 R2로 직접 업로드할 multipart upload session을 만든다.
 
 요청:
 
-| 항목   | 위치 | 필수 | 설명                           |
-| ------ | ---- | ---- | ------------------------------ |
-| `file`         | form | 예     | `mp4`, `mov`, `webm` 영상 파일       |
+| 항목           | 위치 | 필수   | 설명                                         |
+| -------------- | ---- | ------ | -------------------------------------------- |
+| `fileName`     | body | 예     | 원본 파일명. `mp4`, `mov`, `webm` 확장자     |
+| `contentType`  | body | 예     | `video/mp4`, `video/quicktime`, `video/webm` |
+| `sizeBytes`    | body | 예     | 원본 파일 byte 크기                          |
+| `whisperModel` | body | 아니오 | `base_en` 또는 `small_en`. 기본값 `base_en`  |
+
+응답:
+
+```json
+{
+  "uploadId": "r2-upload-id",
+  "uploadToken": "signed-token",
+  "objectKey": "subtitles/uploads/{sessionId}/source.mp4",
+  "partSizeBytes": 67108864,
+  "expiresAt": "2026-07-07T07:30:00.000Z",
+  "parts": [
+    {
+      "partNumber": 1,
+      "uploadUrl": "https://..."
+    }
+  ]
+}
+```
+
+현재 처리 방식:
+
+- API는 JSON body 형태, 파일 확장자, MIME type, `sizeBytes <= SUBTITLE_UPLOAD_MAX_BYTES`, `whisperModel`을 검증한다.
+- `sizeBytes`가 `SUBTITLE_UPLOAD_MAX_BYTES`를 넘으면 `413`을 반환한다.
+- 필수 field 누락, 파일 형식, MIME type, `whisperModel` 검증 실패는 `400`을 반환한다.
+- API는 R2 `CreateMultipartUpload`를 호출하고 part별 `UploadPart` presigned URL을 발급한다.
+- 브라우저는 API를 거치지 않고 각 `uploadUrl`에 `PUT`으로 file slice를 올린다.
+- `uploadToken`은 `fileName`, `contentType`, `sizeBytes`, `objectKey`, `uploadId`, `whisperModel`, 만료 시각을 HMAC으로 서명한 bearer token이다.
+- R2 bucket CORS는 운영에서 `PUT`, `HEAD` 또는 필요한 preflight, 그리고 `ExposeHeaders: ETag`를 허용해야 한다.
+
+### `POST /subtitles/uploads/complete`
+
+브라우저의 R2 multipart upload가 끝난 뒤 자막 job을 생성한다.
+
+요청:
+
+| 항목          | 위치 | 필수 | 설명                                                 |
+| ------------- | ---- | ---- | ---------------------------------------------------- |
+| `objectKey`   | body | 예   | `/subtitles/uploads`에서 받은 R2 object key          |
+| `uploadId`    | body | 예   | `/subtitles/uploads`에서 받은 R2 multipart upload ID |
+| `uploadToken` | body | 예   | `/subtitles/uploads`에서 받은 서명 token             |
+| `parts`       | body | 예   | `{ partNumber, etag }` 배열                          |
+
+현재 처리 방식:
+
+- API는 `uploadToken` 서명, 만료, `objectKey`, `uploadId` 일치를 검증한다.
+- 필수 field 누락 또는 `parts` 형식 검증 실패는 `400`을 반환한다.
+- API는 R2 `CompleteMultipartUpload`를 호출한다.
+- API는 R2 object metadata의 `ContentLength`, `ContentType`이 token payload와 맞는지 확인한다.
+- 검증이 끝나면 `SubtitleJob` row를 `queued` 상태로 생성하고 기존 job 응답을 반환한다.
+- R2 multipart complete 후 metadata 검증 또는 DB job 생성이 실패하면 생성된 source object를 best-effort로 삭제한다.
+
+### `POST /subtitles/uploads/abort`
+
+실패하거나 취소한 R2 multipart upload를 정리한다.
+
+요청:
+
+| 항목          | 위치 | 필수 | 설명                                                 |
+| ------------- | ---- | ---- | ---------------------------------------------------- |
+| `objectKey`   | body | 예   | `/subtitles/uploads`에서 받은 R2 object key          |
+| `uploadId`    | body | 예   | `/subtitles/uploads`에서 받은 R2 multipart upload ID |
+| `uploadToken` | body | 예   | `/subtitles/uploads`에서 받은 서명 token             |
+
+응답:
+
+```json
+{
+  "ok": true
+}
+```
+
+현재 처리 방식:
+
+- API는 `uploadToken` 서명, 만료, `objectKey`, `uploadId` 일치를 검증한다.
+- 필수 field 누락 또는 형식 검증 실패는 `400`을 반환한다.
+- API는 R2 `AbortMultipartUpload`를 호출한다.
+
+### `POST /subtitles/jobs`
+
+로컬 영상 파일을 API multipart body로 업로드하고 영어 SRT 생성 job을 만든다.
+
+상태:
+
+- Deprecated: `subtitle-legacy-multipart-upload`
+- 제거 추적 문서: `docs/deprecated/subtitle-legacy-multipart-upload.md`
+- 운영 대용량 업로드는 Cloudflare request body 제한 때문에 이 endpoint를 기본 경로로 사용하지 않는다.
+
+요청:
+
+| 항목           | 위치 | 필수   | 설명                                        |
+| -------------- | ---- | ------ | ------------------------------------------- |
+| `file`         | form | 예     | `mp4`, `mov`, `webm` 영상 파일              |
 | `whisperModel` | form | 아니오 | `base_en` 또는 `small_en`. 기본값 `base_en` |
 
 응답:
@@ -73,6 +169,7 @@
 
 - API는 업로드 파일의 확장자와 MIME type이 `mp4`, `mov`, `webm` 범위인지 확인한다.
 - 업로드 크기는 `SUBTITLE_UPLOAD_MAX_BYTES` 안이어야 한다.
+- 업로드 크기가 `SUBTITLE_UPLOAD_MAX_BYTES`를 넘으면 `413`을 반환한다.
 - `whisperModel`은 `base_en`, `small_en`만 허용한다.
 - 원본 영상은 R2 `subtitles/{jobId}/source.{ext}`에 저장한다.
 - `SubtitleJob` row는 `queued` 상태로 생성한다.
@@ -90,13 +187,13 @@
 
 상태:
 
-| 상태               | 의미                                      | progress |
-| ------------------ | ----------------------------------------- | -------- |
-| `queued`           | worker 대기                               | 10       |
-| `extracting_audio` | ffmpeg로 audio 추출 중                    | 40       |
-| `transcribing`     | local Whisper로 영어 SRT 생성 중          | 70       |
-| `completed`        | 영어 SRT 생성 완료                        | 100      |
-| `failed`           | 처리 실패                                 | `null`   |
+| 상태               | 의미                             | progress |
+| ------------------ | -------------------------------- | -------- |
+| `queued`           | worker 대기                      | 10       |
+| `extracting_audio` | ffmpeg로 audio 추출 중           | 40       |
+| `transcribing`     | local Whisper로 영어 SRT 생성 중 | 70       |
+| `completed`        | 영어 SRT 생성 완료               | 100      |
+| `failed`           | 처리 실패                        | `null`   |
 
 ### `GET /subtitles/jobs/:jobId/file`
 

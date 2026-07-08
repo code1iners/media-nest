@@ -1,12 +1,17 @@
 import { Readable } from 'node:stream';
 import { ReadableStream } from 'node:stream/web';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -68,6 +73,129 @@ export class R2StorageService {
         Key: input.objectKey,
       }),
     );
+  }
+
+  /** R2 multipart upload를 시작한다. */
+  async createMultipartUpload(input: {
+    /** 브라우저 다운로드 동작을 제어할 disposition. */
+    contentDisposition?: string;
+    /** 업로드할 object MIME type. */
+    contentType: string;
+    /** R2 object key. */
+    objectKey: string;
+  }) {
+    /** R2 설정. */
+    const config = this.getConfig();
+    /** multipart upload 시작 결과. */
+    const output = await this.getClient(config).send(
+      new CreateMultipartUploadCommand({
+        Bucket: config.bucket,
+        ContentDisposition: input.contentDisposition,
+        ContentType: input.contentType,
+        Key: input.objectKey,
+      }),
+    );
+
+    if (!output.UploadId) {
+      throw new InternalServerErrorException('R2 upload ID is missing');
+    }
+
+    return output.UploadId;
+  }
+
+  /** R2 multipart part 업로드용 presigned URL을 만든다. */
+  async createMultipartUploadPartUrl(input: {
+    /** presigned URL 유효 시간. */
+    expiresInSeconds: number;
+    /** R2 object key. */
+    objectKey: string;
+    /** R2 multipart part 번호. */
+    partNumber: number;
+    /** R2 multipart upload ID. */
+    uploadId: string;
+  }) {
+    /** R2 설정. */
+    const config = this.getConfig();
+
+    return getSignedUrl(
+      this.getClient(config),
+      new UploadPartCommand({
+        Bucket: config.bucket,
+        Key: input.objectKey,
+        PartNumber: input.partNumber,
+        UploadId: input.uploadId,
+      }),
+      { expiresIn: input.expiresInSeconds },
+    );
+  }
+
+  /** R2 multipart upload를 완료한다. */
+  async completeMultipartUpload(input: {
+    /** R2 object key. */
+    objectKey: string;
+    /** 업로드된 part 목록. */
+    parts: Array<{
+      /** R2 multipart part ETag. */
+      etag: string;
+      /** R2 multipart part 번호. */
+      partNumber: number;
+    }>;
+    /** R2 multipart upload ID. */
+    uploadId: string;
+  }) {
+    /** R2 설정. */
+    const config = this.getConfig();
+
+    await this.getClient(config).send(
+      new CompleteMultipartUploadCommand({
+        Bucket: config.bucket,
+        Key: input.objectKey,
+        MultipartUpload: {
+          Parts: input.parts.map((part) => ({
+            ETag: part.etag,
+            PartNumber: part.partNumber,
+          })),
+        },
+        UploadId: input.uploadId,
+      }),
+    );
+  }
+
+  /** R2 multipart upload를 취소한다. */
+  async abortMultipartUpload(input: {
+    /** R2 object key. */
+    objectKey: string;
+    /** R2 multipart upload ID. */
+    uploadId: string;
+  }) {
+    /** R2 설정. */
+    const config = this.getConfig();
+
+    await this.getClient(config).send(
+      new AbortMultipartUploadCommand({
+        Bucket: config.bucket,
+        Key: input.objectKey,
+        UploadId: input.uploadId,
+      }),
+    );
+  }
+
+  /** R2 object metadata를 읽는다. */
+  async getObjectMetadata(objectKey: string) {
+    /** R2 설정. */
+    const config = this.getConfig();
+    /** R2 object metadata. */
+    const output = await this.getClient(config).send(
+      new HeadObjectCommand({
+        Bucket: config.bucket,
+        Key: objectKey,
+      }),
+    );
+
+    return {
+      contentLength: output.ContentLength ?? null,
+      contentType: output.ContentType ?? null,
+    };
   }
 
   /** R2 object를 HTTP 응답으로 pipe할 수 있는 stream으로 읽는다. */

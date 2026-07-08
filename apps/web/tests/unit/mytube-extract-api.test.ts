@@ -4,8 +4,11 @@ import {
   WorkerUnavailableError,
   assertWorkerAvailable,
   buildCreateDownloadJobRequest,
+  completeSubtitleUpload,
   createSubtitleJob,
+  createSubtitleUpload,
   getWorkerHealth,
+  uploadSubtitleFileParts,
   waitForDownloadJob,
   waitForSubtitleJob,
 } from '../../src/api/mytube-extract.api';
@@ -166,7 +169,148 @@ describe('mytube extract api client', () => {
     });
   });
 
-  it('creates a subtitle job with multipart form data', async () => {
+  it('creates a subtitle direct upload session', async () => {
+    /** upload session 생성 요청 mock fetch. */
+    const fetcher = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(_url)).toBe(
+        'https://mytube-extract.example/api/subtitles/uploads',
+      );
+      expect(init?.method).toBe('POST');
+      expect(init?.headers).toMatchObject({
+        'Content-Type': 'application/json',
+      });
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        contentType: 'video/mp4',
+        fileName: 'sample-video.mp4',
+        sizeBytes: 5,
+        whisperModel: 'small_en',
+      });
+
+      return new Response(
+        JSON.stringify({
+          expiresAt: '2026-07-03T01:30:00.000Z',
+          objectKey: 'subtitles/uploads/session-1/source.mp4',
+          partSizeBytes: 67108864,
+          parts: [{ partNumber: 1, uploadUrl: 'https://r2.example/part-1' }],
+          uploadId: 'upload-1',
+          uploadToken: 'token',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        },
+      );
+    };
+
+    await expect(
+      createSubtitleUpload(
+        new File(['video'], 'sample-video.mp4', { type: 'video/mp4' }),
+        'small_en',
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+        },
+      ),
+    ).resolves.toMatchObject({
+      objectKey: 'subtitles/uploads/session-1/source.mp4',
+      uploadId: 'upload-1',
+    });
+  });
+
+  it('uploads subtitle file parts to R2 presigned URLs', async () => {
+    /** R2 part PUT 요청 mock fetch. */
+    const fetcher = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(_url)).toBe('https://r2.example/part-1');
+      expect(init?.method).toBe('PUT');
+      expect(init?.body).toBeInstanceOf(Blob);
+
+      return new Response(null, {
+        headers: { ETag: '"etag-1"' },
+        status: 200,
+      });
+    };
+    /** 진행률 기록. */
+    const progress: number[] = [];
+
+    await expect(
+      uploadSubtitleFileParts(
+        new File(['video'], 'sample-video.mp4', { type: 'video/mp4' }),
+        {
+          expiresAt: '2026-07-03T01:30:00.000Z',
+          objectKey: 'subtitles/uploads/session-1/source.mp4',
+          partSizeBytes: 67108864,
+          parts: [{ partNumber: 1, uploadUrl: 'https://r2.example/part-1' }],
+          uploadId: 'upload-1',
+          uploadToken: 'token',
+        },
+        {
+          fetcher,
+          onProgress: (snapshot) => progress.push(snapshot.percent),
+        },
+      ),
+    ).resolves.toEqual([{ etag: '"etag-1"', partNumber: 1 }]);
+    expect(progress).toEqual([100]);
+  });
+
+  it('completes a subtitle direct upload', async () => {
+    /** upload complete 요청 mock fetch. */
+    const fetcher = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(_url)).toBe(
+        'https://mytube-extract.example/api/subtitles/uploads/complete',
+      );
+      expect(init?.method).toBe('POST');
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        objectKey: 'subtitles/uploads/session-1/source.mp4',
+        parts: [{ etag: '"etag-1"', partNumber: 1 }],
+        uploadId: 'upload-1',
+        uploadToken: 'token',
+      });
+
+      return new Response(
+        JSON.stringify({
+          createdAt: '2026-07-03T01:00:00.000Z',
+          displayStatus: 'queued',
+          downloadUrl: null,
+          errorCode: null,
+          fileName: 'sample-video.mp4',
+          jobId: 'subtitle-job-1',
+          message: '요청이 접수되어 대기 중입니다.',
+          progress: 10,
+          retentionDays: 7,
+          stage: 'queued',
+          status: 'queued',
+          whisperModel: 'small_en',
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200,
+        },
+      );
+    };
+
+    await expect(
+      completeSubtitleUpload(
+        {
+          expiresAt: '2026-07-03T01:30:00.000Z',
+          objectKey: 'subtitles/uploads/session-1/source.mp4',
+          partSizeBytes: 67108864,
+          parts: [{ partNumber: 1, uploadUrl: 'https://r2.example/part-1' }],
+          uploadId: 'upload-1',
+          uploadToken: 'token',
+        },
+        [{ etag: '"etag-1"', partNumber: 1 }],
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+        },
+      ),
+    ).resolves.toMatchObject({
+      displayStatus: 'queued',
+      jobId: 'subtitle-job-1',
+    });
+  });
+
+  it('creates a legacy subtitle job with multipart form data', async () => {
     /** 업로드 요청 mock fetch. */
     const fetcher = async (_url: RequestInfo | URL, init?: RequestInit) => {
       expect(String(_url)).toBe(
@@ -210,6 +354,70 @@ describe('mytube extract api client', () => {
     ).resolves.toMatchObject({
       displayStatus: 'queued',
       jobId: 'subtitle-job-1',
+    });
+  });
+
+  it('throws a displayable error when direct subtitle upload is too large', async () => {
+    /** 업로드 용량 초과 응답 mock fetch. */
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify({
+          error: 'Payload Too Large',
+          message: 'File too large',
+          statusCode: 413,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 413,
+        },
+      );
+
+    await expect(
+      createSubtitleUpload(
+        new File(['video'], 'large-video.mp4', { type: 'video/mp4' }),
+        'base_en',
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+        },
+      ),
+    ).rejects.toMatchObject({
+      detail: {
+        requestPath: '/subtitles/uploads',
+        responseStatus: 413,
+      },
+    });
+  });
+
+  it('keeps the legacy subtitle upload 413 request path', async () => {
+    /** 업로드 용량 초과 응답 mock fetch. */
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify({
+          error: 'Payload Too Large',
+          message: 'File too large',
+          statusCode: 413,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+          status: 413,
+        },
+      );
+
+    await expect(
+      createSubtitleJob(
+        new File(['video'], 'large-video.mp4', { type: 'video/mp4' }),
+        'base_en',
+        {
+          apiBaseUrl: 'https://mytube-extract.example/api',
+          fetcher,
+        },
+      ),
+    ).rejects.toMatchObject({
+      detail: {
+        requestPath: '/subtitles/jobs',
+        responseStatus: 413,
+      },
     });
   });
 

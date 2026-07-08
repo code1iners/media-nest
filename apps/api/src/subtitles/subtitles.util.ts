@@ -115,6 +115,17 @@ export function createSubtitleSourceObjectKey(jobId: string, fileName: string) {
   return `subtitles/${jobId}/source.${extension}`;
 }
 
+/** direct upload 중인 자막 source R2 object key를 만든다. */
+export function createSubtitleUploadSourceObjectKey(
+  uploadSessionId: string,
+  fileName: string,
+) {
+  /** 업로드 파일 확장자. */
+  const extension = getFileExtension(fileName) || 'mp4';
+
+  return `subtitles/uploads/${uploadSessionId}/source.${extension}`;
+}
+
 /** 영어 SRT R2 object key를 만든다. */
 export function createSubtitleResultObjectKey(jobId: string) {
   return `subtitles/${jobId}/english.srt`;

@@ -1,5 +1,11 @@
 import { SubtitleJobStatus } from '@mytube-extract/db';
 import { Readable } from 'node:stream';
+import type { z } from 'zod';
+import type {
+  abortSubtitleUploadSchema,
+  completeSubtitleUploadSchema,
+  createSubtitleUploadSchema,
+} from './subtitles.schemas';
 
 /** 자막 job 화면 표시 상태. */
 export type SubtitleDisplayStatus = SubtitleJobStatus | 'expired';
@@ -15,6 +21,42 @@ export type SubtitleErrorCode =
 
 /** 영어 SRT 생성에 사용할 Whisper 모델. */
 export type SubtitleWhisperModel = 'base_en' | 'small_en';
+
+/** direct R2 upload session 생성 요청. */
+export type CreateSubtitleUploadInput = z.infer<
+  typeof createSubtitleUploadSchema
+>;
+
+/** direct R2 upload session 생성 응답. */
+export type SubtitleUploadResponse = {
+  /** R2 multipart upload ID. */
+  uploadId: string;
+  /** complete/abort 요청 검증용 서명 token. */
+  uploadToken: string;
+  /** R2 source object key. */
+  objectKey: string;
+  /** browser가 나눠 올릴 part byte 크기. */
+  partSizeBytes: number;
+  /** presigned URL 만료 시각. */
+  expiresAt: string;
+  /** 각 part별 presigned upload URL. */
+  parts: Array<{
+    /** R2 multipart part 번호. */
+    partNumber: number;
+    /** browser가 PUT할 presigned URL. */
+    uploadUrl: string;
+  }>;
+};
+
+/** direct R2 multipart upload 완료 요청. */
+export type CompleteSubtitleUploadInput = z.infer<
+  typeof completeSubtitleUploadSchema
+>;
+
+/** direct R2 multipart upload 취소 요청. */
+export type AbortSubtitleUploadInput = z.infer<
+  typeof abortSubtitleUploadSchema
+>;
 
 /** 자막 job API 응답. */
 export type SubtitleJobResponse = {
@@ -54,7 +96,10 @@ export type SubtitleFile = {
   contentDisposition: string;
 };
 
-/** Multer가 임시 디스크에 저장한 업로드 파일 중 필요한 표면. */
+/**
+ * @deprecated subtitle-legacy-multipart-upload
+ * R2 direct multipart upload 안정화 후 제거한다.
+ */
 export type UploadedSubtitleFile = {
   /** 브라우저가 전달한 MIME type. */
   mimetype: string;

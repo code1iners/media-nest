@@ -18,10 +18,12 @@
 5. 사용자가 Whisper 모델을 `빠름 · base.en` 또는 `정확도 · small.en` 중 선택한다.
 6. 앱은 영상 metadata에서 길이를 읽어 선택 모델 기준 예상 처리 시간을 표시한다.
 7. `영어 SRT 생성`을 누른다.
-8. 앱은 worker 상태를 확인한 뒤 `/subtitles/jobs` job을 생성한다.
-9. terminal 상태까지 `/subtitles/jobs/:jobId`를 polling한다.
-10. 요청 생성 중이거나 terminal 상태 전이면 하단 navigation으로 다른 route 이동을 막는다.
-11. 완료되면 영어 SRT 다운로드 링크를 표시한다.
+8. 앱은 worker 상태를 확인한 뒤 `/subtitles/uploads`로 R2 direct upload session을 생성한다.
+9. 앱은 presigned URL에 영상 part를 직접 `PUT`으로 업로드하고 진행률을 표시한다.
+10. 앱은 `/subtitles/uploads/complete`로 자막 job을 생성한다.
+11. terminal 상태까지 `/subtitles/jobs/:jobId`를 polling한다.
+12. 요청 생성 중이거나 terminal 상태 전이면 하단 navigation으로 다른 route 이동을 막는다.
+13. 완료되면 영어 SRT 다운로드 링크를 표시한다.
 
 ## 현재 표시 내용
 
@@ -36,7 +38,10 @@
 ## API
 
 - `GET /health`: worker 사용 가능 여부 확인
-- `POST /subtitles/jobs`: `file`, `whisperModel`로 자막 job 생성
+- `POST /subtitles/uploads`: R2 direct upload session 생성
+- R2 presigned URL `PUT`: 영상 part 직접 업로드
+- `POST /subtitles/uploads/complete`: R2 multipart upload 완료와 자막 job 생성
+- `POST /subtitles/uploads/abort`: 실패한 R2 multipart upload 정리
 - `GET /subtitles/jobs/:jobId`: job 상태 polling
 - `GET {downloadUrl}`: 완료 SRT 다운로드
 
@@ -45,8 +50,11 @@
 - 입력 검증 실패: submit 비활성화
 - worker unavailable: `자막 추출 기능을 사용할 수 없습니다`
 - health 확인 실패: `서비스 상태를 확인할 수 없습니다`
+- 업로드 용량 초과: 선택한 파일 크기를 포함한 용량 초과 안내
+- R2 direct upload 실패: 실패 안내와 상세 원인 보기
 - 파일 선택 전: `파일 선택` 단계 선택
 - 유효 파일 선택 후: `대기` 단계 선택
+- R2 direct upload 중: 업로드 진행률 표시
 - queued/extracting_audio/transcribing/completed/failed/expired: 상태 패널과 진행률 표시
 - completed: API base URL과 `downloadUrl`을 결합한 다운로드 링크 표시
 - in progress: 다른 하단 navigation route로 이동 차단

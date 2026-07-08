@@ -15,11 +15,15 @@ import {
 } from '../../../../domain/subtitle-request/subtitle-request';
 import {
   type UserVisibleErrorDetail,
+  SubtitleUploadTooLargeError,
   WorkerUnavailableError,
+  abortSubtitleUpload,
   assertWorkerAvailable,
   buildApiUrl,
-  createSubtitleJob,
+  completeSubtitleUpload,
+  createSubtitleUpload,
   getWorkerHealth,
+  uploadSubtitleFileParts,
   waitForSubtitleJob,
 } from '../../../../api/mytube-extract.api';
 import { useNavigationLock } from '../../../components/navigation-lock-context';
@@ -44,9 +48,7 @@ const WORKER_HEALTH_REFETCH_INTERVAL_MS = 15_000;
 const DEFAULT_WHISPER_MODEL: SubtitleWhisperModel = 'base_en';
 
 /** 화면에 표시하는 자막 처리 단계. */
-export type SubtitleStepKey =
-  | 'file_select'
-  | SubtitleJobResponse['stage'];
+export type SubtitleStepKey = 'file_select' | SubtitleJobResponse['stage'];
 
 /** 자막 추출 route의 file upload, polling, 표시 상태를 조합한다. */
 export function useSubtitlesExtractLogic() {
@@ -76,6 +78,8 @@ export function useSubtitlesExtractLogic() {
     useState<number | null>(null);
   /** 요청 실패 메시지. */
   const [requestError, setRequestError] = useState('');
+  /** R2 direct upload 진행률. */
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Hooks.
 
@@ -103,10 +107,38 @@ export function useSubtitlesExtractLogic() {
 
       assertWorkerAvailable(workerHealth.data);
 
-      return createSubtitleJob(input.file, selectedWhisperModel, {
-        apiBaseUrl,
-        signal: input.signal,
-      });
+      /** 생성된 R2 direct upload session. */
+      let upload: Awaited<ReturnType<typeof createSubtitleUpload>> | null =
+        null;
+
+      try {
+        upload = await createSubtitleUpload(input.file, selectedWhisperModel, {
+          apiBaseUrl,
+          signal: input.signal,
+        });
+        setUploadProgress(0);
+
+        /** R2에 직접 업로드한 multipart part 목록. */
+        const parts = await uploadSubtitleFileParts(input.file, upload, {
+          signal: input.signal,
+          onProgress: (progress) => setUploadProgress(progress.percent),
+        });
+
+        return completeSubtitleUpload(upload, parts, {
+          apiBaseUrl,
+          signal: input.signal,
+        });
+      } catch (error) {
+        if (upload && !input.signal.aborted) {
+          void abortSubtitleUpload(upload, { apiBaseUrl }).catch(() => {
+            // 실패한 multipart upload 정리는 best-effort로만 수행한다.
+          });
+        }
+
+        throw error;
+      } finally {
+        setUploadProgress(null);
+      }
     },
   });
   /** 추출 진행 중 route 이동 차단 상태를 갱신한다. */
@@ -132,10 +164,16 @@ export function useSubtitlesExtractLogic() {
   const workerHealthErrorDetail = createWorkerHealthErrorDetail(
     workerHealthQuery.error,
   );
+  /** 자막 생성 요청 오류 상세 원인. */
+  const requestErrorDetail =
+    subtitleJobMutation.error instanceof Error &&
+    hasUserVisibleErrorDetail(subtitleJobMutation.error)
+      ? subtitleJobMutation.error.detail
+      : undefined;
   /** 현재 상태 패널 상세 원인. */
   const statusErrorDetail = workerUnavailable
     ? WORKER_UNAVAILABLE_DETAIL
-    : workerHealthErrorDetail;
+    : (workerHealthErrorDetail ?? requestErrorDetail);
   /** 자막 생성 요청 가능 여부. */
   const canSubmit =
     validation.kind === 'ready' &&
@@ -143,7 +181,8 @@ export function useSubtitlesExtractLogic() {
     !subtitleJobMutation.isPending &&
     workerHealthQuery.data?.worker?.available === true;
   /** Whisper 모델 선택 가능 여부. */
-  const canChangeWhisperModel = !jobInProgress && !subtitleJobMutation.isPending;
+  const canChangeWhisperModel =
+    !jobInProgress && !subtitleJobMutation.isPending;
   /** 오른쪽 status panel에 표시할 job. */
   const statusJob = activeJob ?? createIdleSubtitleJob(selectedFile);
   /** 화면에 선택 표시할 처리 단계. */
@@ -154,13 +193,19 @@ export function useSubtitlesExtractLogic() {
   });
   /** 10칸 진행률 bar 중 채울 칸 수. */
   const filledProgressCells =
-    statusJob.progress === null ? 0 : Math.round(statusJob.progress / 10);
+    uploadProgress !== null
+      ? Math.round(uploadProgress / 10)
+      : statusJob.progress === null
+        ? 0
+        : Math.round(statusJob.progress / 10);
   /** 현재 상태 제목. */
   const statusTitle =
     createWorkerHealthTitle({
       failed: workerHealthFailed,
       unavailable: workerUnavailable,
-    }) || createStatusTitle(statusJob);
+    }) ||
+    (uploadProgress !== null ? '원본 영상을 업로드 중입니다' : '') ||
+    createStatusTitle(statusJob);
   /** 현재 상태 문구. */
   const statusMessage =
     createWorkerHealthMessage({
@@ -168,6 +213,9 @@ export function useSubtitlesExtractLogic() {
       pending: workerHealthChecking,
       unavailable: workerUnavailable,
     }) ||
+    (uploadProgress !== null
+      ? `R2로 원본 영상을 직접 업로드 중입니다. (${uploadProgress}%)`
+      : '') ||
     requestError ||
     statusJob.message ||
     validation.message;
@@ -175,12 +223,16 @@ export function useSubtitlesExtractLogic() {
   const statusIconName =
     workerHealthFailed || workerUnavailable
       ? 'failed'
-      : getStatusIconName(statusJob.displayStatus);
+      : uploadProgress !== null
+        ? 'processing'
+        : getStatusIconName(statusJob.displayStatus);
   /** 현재 상태 표시 tone. */
   const statusTone =
     workerHealthFailed || workerUnavailable
       ? 'failed'
-      : getStatusTone(statusJob.displayStatus);
+      : uploadProgress !== null
+        ? 'processing'
+        : getStatusTone(statusJob.displayStatus);
   /** 완료 SRT 다운로드 href. */
   const downloadHref = statusJob.downloadUrl
     ? buildApiUrl(statusJob.downloadUrl, apiBaseUrl)
@@ -221,6 +273,8 @@ export function useSubtitlesExtractLogic() {
     setActiveJob(null);
     setSelectedVideoDurationSeconds(null);
     setRequestError('');
+    setUploadProgress(null);
+    subtitleJobMutation.reset();
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -237,6 +291,8 @@ export function useSubtitlesExtractLogic() {
     setActiveJob(null);
     setSelectedVideoDurationSeconds(null);
     setRequestError('');
+    setUploadProgress(null);
+    subtitleJobMutation.reset();
   }
 
   /** worker health를 다시 확인한다. */
@@ -332,6 +388,7 @@ export function useSubtitlesExtractLogic() {
 
     stopPolling();
     setRequestError('');
+    subtitleJobMutation.reset();
 
     try {
       /** 새 자막 job polling 컨트롤러. */
@@ -363,7 +420,11 @@ export function useSubtitlesExtractLogic() {
       setRequestError(
         error instanceof WorkerUnavailableError
           ? WORKER_UNAVAILABLE_MESSAGE
-          : '자막 생성 요청에 실패했습니다. 다시 시도해 주세요.',
+          : error instanceof SubtitleUploadTooLargeError
+            ? createSubtitleUploadTooLargeMessage(selectedFile)
+            : error instanceof Error && hasUserVisibleErrorDetail(error)
+              ? error.detail.guidance
+              : '자막 생성 요청에 실패했습니다. 다시 시도해 주세요.',
       );
     }
   }
@@ -573,6 +634,11 @@ function hasUserVisibleErrorDetail(
     typeof (error as { detail?: unknown }).detail === 'object' &&
     (error as { detail?: unknown }).detail !== null
   );
+}
+
+/** 업로드 용량 초과 안내 문구를 만든다. */
+function createSubtitleUploadTooLargeMessage(file: File) {
+  return `파일이 너무 큽니다. 선택한 파일: ${formatFileSize(file.size)}. 더 작은 영상 파일을 선택해 주세요.`;
 }
 
 /** byte 크기를 화면 표시용으로 줄인다. */

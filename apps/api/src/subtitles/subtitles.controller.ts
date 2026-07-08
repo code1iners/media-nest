@@ -9,14 +9,56 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import {
+  abortSubtitleUploadSchema,
+  completeSubtitleUploadSchema,
+  createSubtitleUploadSchema,
+} from './subtitles.schemas';
 import { SubtitlesService } from './subtitles.service';
-import { SubtitleJobResponse, UploadedSubtitleFile } from './subtitles.types';
+import type {
+  AbortSubtitleUploadInput,
+  CompleteSubtitleUploadInput,
+  CreateSubtitleUploadInput,
+  SubtitleJobResponse,
+  UploadedSubtitleFile,
+} from './subtitles.types';
 
-@Controller('subtitles/jobs')
+@Controller('subtitles')
 export class SubtitlesController {
   constructor(private readonly subtitlesService: SubtitlesService) {}
 
-  @Post('/')
+  @Post('uploads')
+  createSubtitleUpload(
+    @Body(new ZodValidationPipe(createSubtitleUploadSchema))
+    body: CreateSubtitleUploadInput,
+  ) {
+    return this.subtitlesService.createUpload(body);
+  }
+
+  @Post('uploads/complete')
+  completeSubtitleUpload(
+    @Body(new ZodValidationPipe(completeSubtitleUploadSchema))
+    body: CompleteSubtitleUploadInput,
+  ): Promise<SubtitleJobResponse> {
+    return this.subtitlesService.completeUpload(body);
+  }
+
+  @Post('uploads/abort')
+  async abortSubtitleUpload(
+    @Body(new ZodValidationPipe(abortSubtitleUploadSchema))
+    body: AbortSubtitleUploadInput,
+  ) {
+    await this.subtitlesService.abortUpload(body);
+
+    return { ok: true };
+  }
+
+  /**
+   * @deprecated subtitle-legacy-multipart-upload
+   * R2 direct multipart upload 안정화 후 제거한다.
+   */
+  @Post('jobs')
   @UseInterceptors(FileInterceptor('file'))
   createSubtitleJob(
     @UploadedFile() file?: UploadedSubtitleFile,
@@ -25,12 +67,12 @@ export class SubtitlesController {
     return this.subtitlesService.create(file, whisperModel);
   }
 
-  @Get(':jobId')
+  @Get('jobs/:jobId')
   getSubtitleJob(@Param('jobId') jobId: string): Promise<SubtitleJobResponse> {
     return this.subtitlesService.get(jobId);
   }
 
-  @Get(':jobId/file')
+  @Get('jobs/:jobId/file')
   async getSubtitleFile(@Param('jobId') jobId: string) {
     /** R2에서 읽은 attachment 응답용 SRT 파일 정보. */
     const file = await this.subtitlesService.getFile(jobId);

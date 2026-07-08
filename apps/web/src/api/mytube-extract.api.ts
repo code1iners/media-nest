@@ -68,6 +68,45 @@ export type WaitForSubtitleJobOptions = {
   onStatus?: (snapshot: SubtitleJobResponse) => void;
 };
 
+/** direct R2 upload session 생성 응답. */
+export type SubtitleUploadResponse = {
+  /** presigned URL 만료 시각. */
+  expiresAt: string;
+  /** R2 source object key. */
+  objectKey: string;
+  /** browser가 나눠 올릴 part byte 크기. */
+  partSizeBytes: number;
+  /** 각 part별 presigned upload URL. */
+  parts: Array<{
+    /** R2 multipart part 번호. */
+    partNumber: number;
+    /** browser가 PUT할 presigned URL. */
+    uploadUrl: string;
+  }>;
+  /** R2 multipart upload ID. */
+  uploadId: string;
+  /** complete/abort 요청 검증용 서명 token. */
+  uploadToken: string;
+};
+
+/** R2 multipart upload 완료에 필요한 part 정보. */
+export type SubtitleUploadedPart = {
+  /** R2 multipart part ETag. */
+  etag: string;
+  /** R2 multipart part 번호. */
+  partNumber: number;
+};
+
+/** direct upload 진행률. */
+export type SubtitleUploadProgress = {
+  /** 현재 완료된 byte 수. */
+  uploadedBytes: number;
+  /** 전체 byte 수. */
+  totalBytes: number;
+  /** 완료된 비율. */
+  percent: number;
+};
+
 /** 다운로드 job 생성 요청. */
 export type CreateDownloadJobRequest = {
   /** API 요청 URL. */
@@ -129,6 +168,49 @@ export class ServiceStatusFormatError extends Error {
       location: '서비스 상태 확인',
       requestPath: '/health',
       responseBody: sanitizeErrorText(input.responseBody),
+      responseStatus: input.responseStatus,
+    };
+  }
+
+  /** 사용자에게 열람 가능한 오류 상세 정보. */
+  detail: UserVisibleErrorDetail;
+}
+
+/** 자막 원본 영상 업로드 용량 초과 오류. */
+export class SubtitleUploadTooLargeError extends Error {
+  constructor(requestPath: string) {
+    super('Subtitle upload is too large.');
+    this.name = 'SubtitleUploadTooLargeError';
+    this.detail = {
+      code: 'SUBTITLE_UPLOAD_TOO_LARGE',
+      guidance: '업로드 가능한 크기보다 큰 영상 파일입니다.',
+      location: '자막 원본 업로드',
+      requestPath,
+      responseStatus: 413,
+    };
+  }
+
+  /** 사용자에게 열람 가능한 오류 상세 정보. */
+  detail: UserVisibleErrorDetail;
+}
+
+/** R2 direct upload 실패 오류. */
+export class SubtitleDirectUploadFailedError extends Error {
+  constructor(input: {
+    /** 사용자 안내 문구. */
+    guidance: string;
+    /** 오류 발생 위치. */
+    location: string;
+    /** 응답 상태 코드. */
+    responseStatus?: number;
+  }) {
+    super('Subtitle direct upload failed.');
+    this.name = 'SubtitleDirectUploadFailedError';
+    this.detail = {
+      code: 'SUBTITLE_DIRECT_UPLOAD_FAILED',
+      guidance: input.guidance,
+      location: input.location,
+      requestPath: 'R2 presigned upload URL',
       responseStatus: input.responseStatus,
     };
   }
@@ -234,7 +316,186 @@ export async function createDownloadJob(
   return (await response.json()) as DownloadResponse;
 }
 
-/** 자막 job을 생성한다. */
+/** R2 direct upload session을 생성한다. */
+export async function createSubtitleUpload(
+  file: File,
+  whisperModel: SubtitleWhisperModel,
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: MyTubeExtractFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
+) {
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** direct upload session 생성 응답. */
+  const response = await fetcher(
+    buildApiUrl('/subtitles/uploads', options.apiBaseUrl),
+    {
+      body: JSON.stringify({
+        contentType: file.type,
+        fileName: file.name,
+        sizeBytes: file.size,
+        whisperModel,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      signal: options.signal,
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 413) {
+      throw new SubtitleUploadTooLargeError('/subtitles/uploads');
+    }
+
+    throw new Error('Subtitle upload session create failed.');
+  }
+
+  return (await response.json()) as SubtitleUploadResponse;
+}
+
+/** 파일을 R2 multipart presigned URL로 직접 업로드한다. */
+export async function uploadSubtitleFileParts(
+  file: File,
+  upload: SubtitleUploadResponse,
+  options: {
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: MyTubeExtractFetch;
+    /** 업로드 진행률 콜백. */
+    onProgress?: (progress: SubtitleUploadProgress) => void;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
+) {
+  /** R2 PUT 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** part 업로드 결과. */
+  const uploadedParts: SubtitleUploadedPart[] = [];
+  /** 다음에 업로드할 part index. */
+  let nextPartIndex = 0;
+  /** 완료된 byte 수. */
+  let uploadedBytes = 0;
+  /** 브라우저 동시 업로드 수. */
+  const concurrency = Math.min(3, upload.parts.length);
+
+  /** 단일 part 업로드 worker. */
+  async function uploadNextPart() {
+    while (nextPartIndex < upload.parts.length) {
+      /** 현재 worker가 담당할 part index. */
+      const partIndex = nextPartIndex;
+      nextPartIndex += 1;
+
+      /** 현재 업로드할 part. */
+      const part = upload.parts[partIndex];
+      /** part 시작 byte offset. */
+      const start = partIndex * upload.partSizeBytes;
+      /** part 끝 byte offset. */
+      const end = Math.min(start + upload.partSizeBytes, file.size);
+      /** 업로드할 file slice. */
+      const body = file.slice(start, end);
+      /** 업로드된 part ETag. */
+      const etag = await uploadSubtitlePart(fetcher, part.uploadUrl, body, {
+        signal: options.signal,
+      });
+
+      uploadedParts.push({ etag, partNumber: part.partNumber });
+      uploadedBytes += body.size;
+      options.onProgress?.({
+        percent: Math.min(100, Math.round((uploadedBytes / file.size) * 100)),
+        totalBytes: file.size,
+        uploadedBytes,
+      });
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: concurrency }, () => uploadNextPart()),
+  );
+
+  return uploadedParts.sort(
+    (first, second) => first.partNumber - second.partNumber,
+  );
+}
+
+/** R2 direct upload를 완료하고 자막 job을 생성한다. */
+export async function completeSubtitleUpload(
+  upload: SubtitleUploadResponse,
+  parts: SubtitleUploadedPart[],
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: MyTubeExtractFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
+) {
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+  /** direct upload 완료 응답. */
+  const response = await fetcher(
+    buildApiUrl('/subtitles/uploads/complete', options.apiBaseUrl),
+    {
+      body: JSON.stringify({
+        objectKey: upload.objectKey,
+        parts,
+        uploadId: upload.uploadId,
+        uploadToken: upload.uploadToken,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      signal: options.signal,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('Subtitle upload complete failed.');
+  }
+
+  return (await response.json()) as SubtitleJobResponse;
+}
+
+/** R2 direct upload를 취소한다. */
+export async function abortSubtitleUpload(
+  upload: SubtitleUploadResponse,
+  options: {
+    /** API base URL. */
+    apiBaseUrl?: string;
+    /** 테스트에서 대체할 fetch 함수. */
+    fetcher?: MyTubeExtractFetch;
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  } = {},
+) {
+  /** API 요청에 사용할 fetch 함수. */
+  const fetcher = options.fetcher ?? fetch;
+
+  await fetcher(buildApiUrl('/subtitles/uploads/abort', options.apiBaseUrl), {
+    body: JSON.stringify({
+      objectKey: upload.objectKey,
+      uploadId: upload.uploadId,
+      uploadToken: upload.uploadToken,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+    signal: options.signal,
+  });
+}
+
+/**
+ * @deprecated subtitle-legacy-multipart-upload
+ * R2 direct multipart upload 안정화 후 제거한다.
+ */
 export async function createSubtitleJob(
   file: File,
   whisperModel: SubtitleWhisperModel,
@@ -266,10 +527,68 @@ export async function createSubtitleJob(
   );
 
   if (!response.ok) {
+    if (response.status === 413) {
+      throw new SubtitleUploadTooLargeError('/subtitles/jobs');
+    }
+
     throw new Error('Subtitle job create failed.');
   }
 
   return (await response.json()) as SubtitleJobResponse;
+}
+
+/** R2 presigned URL 하나에 part를 업로드한다. */
+async function uploadSubtitlePart(
+  fetcher: MyTubeExtractFetch,
+  uploadUrl: string,
+  body: Blob,
+  options: {
+    /** 요청 중단 신호. */
+    signal?: AbortSignal;
+  },
+) {
+  try {
+    /** R2 part 업로드 응답. */
+    const response = await fetcher(uploadUrl, {
+      body,
+      method: 'PUT',
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      throw new SubtitleDirectUploadFailedError({
+        guidance: 'R2 part 업로드가 실패했습니다. 잠시 후 다시 시도해 주세요.',
+        location: 'R2 part 업로드',
+        responseStatus: response.status,
+      });
+    }
+
+    /** multipart complete에 필요한 ETag 응답 헤더. */
+    const etag = response.headers.get('ETag');
+
+    if (!etag) {
+      throw new SubtitleDirectUploadFailedError({
+        guidance: 'R2 CORS 설정에서 ETag 응답 헤더 노출이 필요합니다.',
+        location: 'R2 part 업로드 응답 확인',
+      });
+    }
+
+    return etag;
+  } catch (error) {
+    if (error instanceof DOMException) {
+      throw error;
+    }
+
+    if (error instanceof SubtitleDirectUploadFailedError) {
+      throw error;
+    }
+
+    throw new SubtitleDirectUploadFailedError({
+      guidance:
+        'R2 업로드 요청이 차단되었습니다. R2 CORS에서 PUT preflight와 ETag 응답 헤더 노출을 확인해 주세요.',
+      location: 'R2 part 업로드',
+    });
+  }
 }
 
 /** 다운로드 job 상태를 조회한다. */
