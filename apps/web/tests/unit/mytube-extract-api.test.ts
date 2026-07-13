@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_API_BASE_URL,
   ServiceStatusFormatError,
   WorkerUnavailableError,
   assertWorkerAvailable,
@@ -22,6 +23,10 @@ const baseDraft: DownloadDraft = {
 };
 
 describe('mytube extract api client', () => {
+  it('uses port 5011 as the local API default', () => {
+    expect(DEFAULT_API_BASE_URL).toBe('http://127.0.0.1:5011');
+  });
+
   it('builds an audio download job request', () => {
     /** 생성된 다운로드 job 요청. */
     const request = buildCreateDownloadJobRequest(

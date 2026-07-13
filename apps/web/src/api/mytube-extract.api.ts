@@ -123,7 +123,7 @@ export type CreateDownloadJobRequest = {
 };
 
 /** 로컬 MyTube Extract API 서버 주소. */
-const LOCAL_API_BASE_URL = 'http://127.0.0.1:3030';
+const LOCAL_API_BASE_URL = 'http://127.0.0.1:5011';
 
 /** 운영 MyTube Extract API 서버 주소. */
 const PRODUCTION_API_BASE_URL = 'https://media-nest.codeliners.cc';

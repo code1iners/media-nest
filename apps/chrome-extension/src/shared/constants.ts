@@ -2,7 +2,7 @@
 export const PRODUCTION_API_BASE_URL = 'https://media-nest.codeliners.cc';
 
 /** 로컬 MyTube Extract API 서버 주소. */
-export const LOCAL_API_BASE_URL = 'http://127.0.0.1:3030';
+export const LOCAL_API_BASE_URL = 'http://127.0.0.1:5011';
 
 /** WXT runtime에서 노출하는 MyTube Extract import.meta shape. */
 type MyTubeExtractImportMeta = ImportMeta & {

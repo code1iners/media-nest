@@ -26,12 +26,14 @@ COPY apps/chrome-extension/package.json ./apps/chrome-extension/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/worker/package.json ./apps/worker/package.json
 COPY packages/db/package.json ./packages/db/package.json
+COPY packages/media-downloader/package.json ./packages/media-downloader/package.json
 ARG YOUTUBE_DL_HOST
 RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
 RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm rebuild --pending
 RUN pnpm --filter @mytube-extract/db run build
+RUN pnpm --filter @mytube-extract/media-downloader run build
 RUN pnpm --filter api run build
 RUN pnpm --filter api deploy --prod --legacy /prod/api
 
@@ -44,7 +46,7 @@ ARG FFMPEG_VERSION
 ARG EXPECTED_FFMPEG_VERSION
 
 ENV NODE_ENV=production
-ENV PORT=3030
+ENV PORT=5011
 ENV FFMPEG_LOCATION=/usr/bin/ffmpeg
 ENV EXPECTED_NODE_MAJOR=22
 ENV EXPECTED_YT_DLP_VERSION=${YT_DLP_VERSION}
@@ -68,8 +70,8 @@ COPY --chown=node:node --from=build /prod/api ./apps/api
 
 USER node
 
-EXPOSE 3030
+EXPOSE 5011
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "const port = process.env.PORT || 3030; fetch('http://127.0.0.1:' + port + '/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "const port = process.env.PORT || 5011; fetch('http://127.0.0.1:' + port + '/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1));"]
 
 CMD ["node", "apps/api/dist/main"]

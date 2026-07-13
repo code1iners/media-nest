@@ -45,14 +45,14 @@
 
 빈 `filename`, `bitrate`, `resolution`은 API 서버 기본 동작에 맡긴다. API 서버는 파일명이 없으면 15자 랜덤 파일명을 사용하고, `bitrate` 또는 `resolution`이 없으면 기본 포맷 selector를 사용한다.
 
-API base URL은 `WXT_MYTUBE_EXTRACT_API_BASE_URL` 환경 변수로 정하며 popup에서 사용자 입력을 받지 않는다. 운영 값은 `https://media-nest.codeliners.cc`, 로컬 값은 `http://127.0.0.1:3030`만 사용한다. 기존 `WXT_MEDIA_NEST_API_BASE_URL`은 runtime fallback으로, `MYTUBE_EXTRACT_API_BASE_URL`과 `MEDIA_NEST_API_BASE_URL`은 `wxt.config.ts` host permission fallback으로만 지원한다.
+API base URL은 `WXT_MYTUBE_EXTRACT_API_BASE_URL` 환경 변수로 정하며 popup에서 사용자 입력을 받지 않는다. 운영 값은 `https://media-nest.codeliners.cc`, 로컬 값은 `http://127.0.0.1:5011`만 사용한다. 기존 `WXT_MEDIA_NEST_API_BASE_URL`은 runtime fallback으로, `MYTUBE_EXTRACT_API_BASE_URL`과 `MEDIA_NEST_API_BASE_URL`은 `wxt.config.ts` host permission fallback으로만 지원한다.
 
 ## API 호출 계약
 
 ### 서버 기준
 
 - 운영 API 서버 주소는 `https://media-nest.codeliners.cc`다.
-- 로컬 API 서버 주소는 `http://127.0.0.1:3030`다.
+- 로컬 API 서버 주소는 `http://127.0.0.1:5011`다.
 - 서버 상태 확인은 `GET /health`를 사용한다.
 - API CORS는 no-origin 요청, 운영 web origin, local preview/dev origin만 허용한다.
 - 고정 extension ID 기반 `chrome-extension://...` origin 허용은 현재 제외되어 있으므로 확장 프로그램 MVP의 필수 조건으로 두지 않는다.
@@ -119,7 +119,7 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 - `downloads` 권한은 Chrome downloads API로 다운로드를 시작하는 데 사용한다.
 - `activeTab`은 사용자가 버튼으로 현재 탭 URL을 가져올 때만 사용한다.
 - `content_scripts`는 popup 중심 MVP에서는 사용하지 않는다.
-- `host_permissions`는 `WXT_MYTUBE_EXTRACT_API_BASE_URL`, `MYTUBE_EXTRACT_API_BASE_URL`, `WXT_MEDIA_NEST_API_BASE_URL`, `MEDIA_NEST_API_BASE_URL` 순서로 origin을 고르고, 값이 없거나 URL parsing에 실패하면 `https://media-nest.codeliners.cc/*`를 사용한다. 운영 build는 `https://media-nest.codeliners.cc/*`, 로컬 dev는 `http://127.0.0.1:3030/*`만 필요하다.
+- `host_permissions`는 `WXT_MYTUBE_EXTRACT_API_BASE_URL`, `MYTUBE_EXTRACT_API_BASE_URL`, `WXT_MEDIA_NEST_API_BASE_URL`, `MEDIA_NEST_API_BASE_URL` 순서로 origin을 고르고, 값이 없거나 URL parsing에 실패하면 `https://media-nest.codeliners.cc/*`를 사용한다. 운영 build는 `https://media-nest.codeliners.cc/*`, 로컬 dev는 `http://127.0.0.1:5011/*`만 필요하다.
 - manifest 값은 `wxt.config.ts`와 WXT popup entrypoint에서 생성되며, production output은 `.output/chrome-mv3/manifest.json`에 생성된다.
 
 ### Popup

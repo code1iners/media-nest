@@ -51,6 +51,11 @@ export function parseYoutubeVideoId(inputUrl: string | undefined) {
   throw new BadRequestException('url must be a valid YouTube URL');
 }
 
+/** 검증된 video ID만 포함한 worker용 canonical YouTube URL을 만든다. */
+export function createCanonicalYoutubeUrl(videoId: string) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
 /** 요청 type을 DB enum 값으로 정규화한다. */
 export function parseDownloadType(type: string | undefined) {
   if (type === ExtractionType.audio || type === ExtractionType.video) {

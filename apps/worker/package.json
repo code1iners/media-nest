@@ -10,12 +10,13 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "tsc --noEmit",
     "start": "node --env-file-if-exists=.env dist/main.js",
-    "test": "node dist/worker.logic.spec.js"
+    "test": "node --test dist/*.spec.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1077.0",
     "@aws-sdk/lib-storage": "^3.1077.0",
     "@mytube-extract/db": "workspace:*",
+    "@mytube-extract/media-downloader": "workspace:*",
     "youtube-dl-exec": "3.1.8"
   },
   "devDependencies": {

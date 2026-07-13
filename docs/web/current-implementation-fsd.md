@@ -44,7 +44,7 @@
 
 ## 환경 설정
 
-- 로컬 dev API 기본값: `http://127.0.0.1:3030`
+- 로컬 dev API 기본값: `http://127.0.0.1:5011`
 - production API 기본값: `https://media-nest.codeliners.cc`
 - 우선 환경 변수: `VITE_MYTUBE_EXTRACT_API_BASE_URL`
 - 전환 기간 fallback: `VITE_MEDIA_NEST_API_BASE_URL`

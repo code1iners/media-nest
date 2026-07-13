@@ -11,6 +11,12 @@ import {
   PrismaClient,
   SubtitleJobStatus,
 } from '@mytube-extract/db';
+import {
+  createSafeDiagnosticLog,
+  createSafeErrorLog,
+  getDownloaderDiagnostic,
+  type YoutubeDlExecute,
+} from '@mytube-extract/media-downloader';
 import { spawn } from 'node:child_process';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
@@ -43,6 +49,7 @@ import {
   SubtitleWorkerFailureCode,
   WorkerFailureCode,
 } from './worker.logic';
+import { downloadExtractionJob } from './download-job';
 
 /** worker idle polling 간격. */
 const LOOP_INTERVAL_MS = parseEnvNumber(
@@ -344,12 +351,50 @@ async function processJob(job: ClaimedDownloadJob) {
       });
     }
 
+    /** yt-dlp format selector. */
+    const format = createYtDlpFormat(job.type, job.quality);
+
+    if (job.type === ExtractionType.video) {
+      await assertVideoPreflight(job.url, format);
+    }
+
     /** R2 object key. */
     const objectKey = createAssetObjectKey(job.videoId, job.type, job.quality);
     /** 원본 영상 제목. */
     const title = await readExtractedAssetTitle(job.url);
     /** 추출 결과 임시 파일 경로. */
-    const outputPath = await downloadJob(job);
+    const outputPath = await downloadExtractionJob({
+      createYoutubeOptions: (path) => {
+        /** ffmpeg 경로 환경 변수. */
+        const ffmpegLocation = process.env.FFMPEG_LOCATION;
+
+        return {
+          addMetadata: true,
+          format,
+          jsRuntimes: 'node' as const,
+          output: path,
+          ...(ffmpegLocation && existsSync(ffmpegLocation)
+            ? { ffmpegLocation }
+            : {}),
+          ...(job.type === ExtractionType.audio
+            ? { audioFormat: 'mp3' as const, extractAudio: true }
+            : { mergeOutputFormat: 'mp4' as const }),
+        };
+      },
+      execute: youtubeExec as unknown as YoutubeDlExecute,
+      onRetry: ({ attempt, error }) => {
+        /** source URL을 제외한 재시도 진단 문자열. */
+        const diagnostic = createSafeDiagnosticLog(error);
+
+        console.warn(
+          `Extraction retry: job=${job.id} type=${job.type} quality=${job.quality} attempt=${attempt}${
+            diagnostic ? ` ${diagnostic}` : ` ${createSafeErrorLog(error)}`
+          }`,
+        );
+      },
+      sourceUrl: job.url,
+      type: job.type,
+    });
 
     try {
       await uploadObject(objectKey, outputPath, createContentType(job.type));
@@ -472,58 +517,11 @@ async function readExtractedAssetTitle(url: string) {
   } catch (error) {
     console.warn(
       `Failed reading video title: ${
-        error instanceof Error ? error.message : String(error)
+        createSafeDiagnosticLog(error) || createSafeErrorLog(error)
       }`,
     );
     return null;
   }
-}
-
-/** yt-dlp로 job 파일을 만든다. */
-async function downloadJob(job: {
-  /** 요청 URL. */
-  url: string;
-  /** 추출 type. */
-  type: ExtractionType;
-  /** 품질 key. */
-  quality: string;
-}) {
-  /** yt-dlp format selector. */
-  const format = createYtDlpFormat(job.type, job.quality);
-
-  if (job.type === ExtractionType.video) {
-    await assertVideoPreflight(job.url, format);
-  }
-
-  /** 요청별 worker 임시 디렉터리. */
-  const workDir = await mkdtemp(join(tmpdir(), `mytube-worker-${job.type}-`));
-  /** 출력 파일 확장자. */
-  const extension = job.type === ExtractionType.audio ? 'mp3' : 'mp4';
-  /** yt-dlp 출력 경로. */
-  const outputPath = resolve(workDir, `output.${extension}`);
-  /** ffmpeg 경로 환경 변수. */
-  const ffmpegLocation = process.env.FFMPEG_LOCATION;
-
-  try {
-    await youtubeExec(job.url, {
-      addMetadata: true,
-      format,
-      ignoreErrors: true,
-      jsRuntimes: 'node',
-      output: outputPath,
-      ...(ffmpegLocation && existsSync(ffmpegLocation)
-        ? { ffmpegLocation }
-        : {}),
-      ...(job.type === ExtractionType.audio
-        ? { audioFormat: 'mp3' as const, extractAudio: true }
-        : { mergeOutputFormat: 'mp4' as const }),
-    });
-  } catch (error) {
-    await rm(workDir, { force: true, recursive: true });
-    throw error;
-  }
-
-  return outputPath;
 }
 
 /** R2 object를 로컬 파일로 저장한다. */
@@ -804,10 +802,13 @@ function isMissingObjectError(error: unknown) {
 
 /** job을 failed로 표시한다. */
 async function markFailed(jobId: string, errorCode: string, error: unknown) {
+  /** DB에 보관할 source-safe 오류 상세. */
+  const errorDetail = createSafeWorkerErrorDetail(error);
+
   await prisma.extractionJob.update({
     data: {
       errorCode,
-      errorDetail: error instanceof Error ? error.message : String(error),
+      errorDetail,
       status: ExtractionJobStatus.failed,
     },
     where: { id: jobId },
@@ -883,6 +884,13 @@ function getWorkerFailureCode(error: unknown): WorkerFailureCode {
     return error.errorCode;
   }
 
+  /** 공통 runner가 구조화한 yt-dlp 진단 정보. */
+  const diagnostic = getDownloaderDiagnostic(error);
+
+  if (diagnostic?.reason === 'youtube-auth-required') {
+    return 'YOUTUBE_AUTH_REQUIRED';
+  }
+
   if (
     error instanceof Error &&
     (error.message.includes('Sign in to confirm you') ||
@@ -892,6 +900,15 @@ function getWorkerFailureCode(error: unknown): WorkerFailureCode {
   }
 
   return 'EXTRACTION_FAILED';
+}
+
+/** controlled worker failure는 유지하고 upstream 오류는 redaction한 DB detail을 만든다. */
+function createSafeWorkerErrorDetail(error: unknown) {
+  if (error instanceof WorkerJobFailure) {
+    return error.message;
+  }
+
+  return createSafeDiagnosticLog(error) || createSafeErrorLog(error);
 }
 
 /** unknown error에서 자막 DB에 저장할 실패 코드를 고른다. */

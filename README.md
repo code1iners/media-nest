@@ -35,7 +35,7 @@ cp apps/chrome-extension/.env.example apps/chrome-extension/.env
 
 주요 환경 변수:
 
-- `PORT`: 서버 포트. 기본값은 `3030`
+- `PORT`: 서버 포트. 기본값은 `5011`
 - `FFMPEG_LOCATION`: ffmpeg 실행 파일 경로
 - `DATABASE_URL`: Prisma가 사용하는 PostgreSQL 연결 URL
 - `DIRECT_URL`: Prisma migration에서 사용할 직접 PostgreSQL 연결 URL
@@ -57,7 +57,7 @@ cp apps/chrome-extension/.env.example apps/chrome-extension/.env
 - `EXPECTED_YT_DLP_VERSION`: 런타임 검증 시 기대하는 yt-dlp 버전
 - `EXPECTED_FFMPEG_LOCATION`: 런타임 검증 시 기대하는 ffmpeg 실행 파일 경로
 - `EXPECTED_FFMPEG_VERSION`: 런타임 검증 시 기대하는 ffmpeg 버전 문자열
-- `VITE_MYTUBE_EXTRACT_API_BASE_URL`: web 앱이 호출할 API base URL. 비워두면 dev는 `http://127.0.0.1:3030`, production은 `https://media-nest.codeliners.cc`
+- `VITE_MYTUBE_EXTRACT_API_BASE_URL`: web 앱이 호출할 API base URL. 비워두면 dev는 `http://127.0.0.1:5011`, production은 `https://media-nest.codeliners.cc`
 - `WXT_MYTUBE_EXTRACT_API_BASE_URL`: Chrome 확장 프로그램이 호출할 API base URL. 비워두면 `https://media-nest.codeliners.cc`
 
 ## Run With Node.js
@@ -98,7 +98,7 @@ pnpm worker:deploy
 API 상태 확인:
 
 ```bash
-curl http://127.0.0.1:3030/health
+curl http://127.0.0.1:5011/health
 ```
 
 worker 상태 확인:
@@ -133,7 +133,7 @@ git pull --ff-only
 pnpm --filter @mytube-extract/db run migrate:deploy
 pnpm worker:deploy
 docker compose ps worker
-curl http://127.0.0.1:3030/health
+curl http://127.0.0.1:5011/health
 ```
 
 런타임 의존성 검증:
@@ -150,7 +150,7 @@ pnpm --filter api run verify:runtime
 git log --oneline -5
 git checkout <known-good-commit>
 pnpm worker:deploy
-curl -fsS http://127.0.0.1:3030/health
+curl -fsS http://127.0.0.1:5011/health
 ```
 
 다시 main 최신으로 복귀:
@@ -237,7 +237,7 @@ http://localhost:3000/popup.html
 확장 프로그램 API 주소는 WXT runtime 환경 변수로 정한다.
 
 ```bash
-WXT_MYTUBE_EXTRACT_API_BASE_URL=http://127.0.0.1:3030 pnpm --filter chrome-extension run dev
+WXT_MYTUBE_EXTRACT_API_BASE_URL=http://127.0.0.1:5011 pnpm --filter chrome-extension run dev
 WXT_MYTUBE_EXTRACT_API_BASE_URL=https://media-nest.codeliners.cc pnpm --filter chrome-extension run build
 ```
 

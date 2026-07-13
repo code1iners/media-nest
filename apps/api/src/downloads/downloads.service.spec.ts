@@ -79,6 +79,36 @@ describe('DownloadsService', () => {
     );
   });
 
+  it('stores a canonical YouTube URL instead of input query credentials', async () => {
+    prismaMock.extractedAsset.findFirst.mockResolvedValueOnce(null);
+    prismaMock.extractionJob.create.mockResolvedValueOnce({
+      asset: null,
+      createdAt: new Date('2026-06-24T05:32:00.000Z'),
+      errorCode: null,
+      id: 'job-1',
+      quality: '1080',
+      status: ExtractionJobStatus.queued,
+      type: ExtractionType.video,
+      url: 'https://www.youtube.com/watch?v=rc5pL5-nS1o',
+      videoId: 'rc5pL5-nS1o',
+    });
+
+    await service.create({
+      quality: '1080',
+      type: 'video',
+      url: 'https://youtu.be/rc5pL5-nS1o?si=private-share-token&token=secret',
+    });
+
+    expect(prismaMock.extractionJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          url: 'https://www.youtube.com/watch?v=rc5pL5-nS1o',
+          videoId: 'rc5pL5-nS1o',
+        }),
+      }),
+    );
+  });
+
   it('normalizes missing audio quality to 320', async () => {
     prismaMock.extractedAsset.findFirst.mockResolvedValueOnce(null);
     prismaMock.extractionJob.create.mockResolvedValueOnce({
@@ -138,14 +168,14 @@ describe('DownloadsService', () => {
 
   it('creates a completed job when a reusable asset exists', async () => {
     prismaMock.extractedAsset.findFirst.mockResolvedValueOnce({
-      expiresAt: new Date('2026-07-08T05:32:00.000Z'),
+      expiresAt: new Date('2099-07-08T05:32:00.000Z'),
       id: 'asset-1',
       objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
     });
     r2StorageServiceMock.objectExists.mockResolvedValueOnce(true);
     prismaMock.extractionJob.create.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
+        expiresAt: new Date('2099-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: 'Never Gonna Give You Up',
@@ -176,7 +206,7 @@ describe('DownloadsService', () => {
 
   it('does not reuse stale asset rows when the object is missing', async () => {
     prismaMock.extractedAsset.findFirst.mockResolvedValueOnce({
-      expiresAt: new Date('2026-07-08T05:32:00.000Z'),
+      expiresAt: new Date('2099-07-08T05:32:00.000Z'),
       id: 'asset-1',
       objectKey: 'extracts/rc5pL5-nS1o/audio-320.mp3',
     });
@@ -227,7 +257,7 @@ describe('DownloadsService', () => {
 
     prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
+        expiresAt: new Date('2099-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: 'Never Gonna Give You Up',
@@ -260,7 +290,7 @@ describe('DownloadsService', () => {
 
     prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
+        expiresAt: new Date('2099-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: null,
@@ -290,7 +320,7 @@ describe('DownloadsService', () => {
 
     prismaMock.extractionJob.findUnique.mockResolvedValueOnce({
       asset: {
-        expiresAt: new Date('2026-07-08T05:32:00.000Z'),
+        expiresAt: new Date('2099-07-08T05:32:00.000Z'),
         id: 'asset-1',
         objectKey: 'extracts/dQw4w9WgXcQ/audio-192.mp3',
         title: "Rock'n Roll (Live)",

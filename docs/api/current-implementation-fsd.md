@@ -38,7 +38,7 @@
 - Media 처리: `youtube-dl-exec` `3.1.8`, `yt-dlp` `2026.06.09`
 - 오디오/비디오 병합 및 추출 의존성: Debian bookworm ffmpeg `7:5.1.8-0+deb12u1`
 - `yt-dlp` 실행 의존성: Debian bookworm `python3`
-- 기본 포트: `PORT` 환경 변수가 없으면 `3030`
+- 기본 포트: `PORT` 환경 변수가 없으면 `5011`
 - 환경 파일: `.env.{NODE_ENV}`, `.env` 순서로 로드
 - API 단독 실행 환경 변수 예시는 `apps/api/.env.example`에 둔다.
 - Docker Compose 통합 실행 환경 변수 예시는 `docker-compose.env.example`에 둔다.
@@ -77,11 +77,12 @@
 - Controller는 query/path/body 입력을 request object 또는 service input으로 넘긴다.
 - Audio/Video service는 포맷 selector, MIME type, 확장자를 결정한다.
 - 공통 media lifecycle은 요청 단위 임시 디렉터리 생성, output path 계산, downloader 실행, cleanup handle 생성을 담당한다.
-- Downloads service는 job row 생성/조회, reusable asset 확인, R2 attachment 응답 준비를 담당한다.
-- Worker는 queued job claim, yt-dlp 실행, R2 upload, asset row upsert, completed/failed 상태 전환을 담당한다.
+- Downloads service는 job row 생성/조회, reusable asset 확인, query-free canonical YouTube URL 저장, R2 attachment 응답 준비를 담당한다.
+- `packages/media-downloader`는 yt-dlp 단일 subprocess 실행, exit/signal/tail diagnostic, output non-empty 검증, redaction을 공통으로 담당한다. API compatibility downloader는 이를 한 번만 호출한다.
+- Worker는 queued job claim, yt-dlp 실행, R2 upload, asset row upsert, completed/failed 상태 전환을 담당한다. extraction subprocess의 일반 실패와 missing output에만 같은 work directory·partial state로 한 번 재시도한다.
 - Worker는 queued subtitle job claim, ffmpeg audio 추출, local Whisper transcription, SRT upload, completed/failed 상태 전환도 담당한다.
 - Worker는 main loop와 별도 heartbeat timer로 `WorkerHeartbeat` 단일 row를 주기적으로 갱신한다.
-- Downloader 실패 진단은 server log에만 남기고 URL credential, local path, token성 query 값은 redaction 후 기록한다.
+- Downloader 실패 진단은 server log와 `ExtractionJob.errorDetail`에만 남기고 URL credential, local path, token성 query 값은 redaction 후 기록한다. API client에는 기존 일반 failure message만 반환한다.
 
 ## CORS
 
@@ -100,3 +101,4 @@
 - `pnpm --filter @mytube-extract/db run build`
 - `pnpm --filter api run test:e2e`
 - `pnpm --filter api run verify:runtime`
+- `pnpm --filter worker run test`

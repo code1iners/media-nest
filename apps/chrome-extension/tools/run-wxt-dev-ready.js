@@ -4,7 +4,7 @@ const http = require('node:http');
 const path = require('node:path');
 
 /** 기본 local MyTube Extract API base URL. */
-const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3030';
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5011';
 /** 기본 WXT dev server port. */
 const DEFAULT_WXT_DEV_PORT = '3001';
 /** 기본 popup preview server port. */

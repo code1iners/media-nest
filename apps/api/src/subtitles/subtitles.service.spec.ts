@@ -94,7 +94,7 @@ describe('SubtitlesService', () => {
     prismaMock.subtitleJob.create.mockResolvedValueOnce({
       createdAt: new Date('2026-07-03T01:00:00.000Z'),
       errorCode: null,
-      expiresAt: new Date('2026-07-10T01:00:00.000Z'),
+      expiresAt: new Date('2099-07-10T01:00:00.000Z'),
       id: 'job-1',
       originalFileName: 'sample-video.mp4',
       resultObjectKey: null,
@@ -146,7 +146,7 @@ describe('SubtitlesService', () => {
     prismaMock.subtitleJob.create.mockResolvedValueOnce({
       createdAt: new Date('2026-07-03T01:00:00.000Z'),
       errorCode: null,
-      expiresAt: new Date('2026-07-10T01:00:00.000Z'),
+      expiresAt: new Date('2099-07-10T01:00:00.000Z'),
       id: 'job-1',
       originalFileName: 'sample-video.mp4',
       resultObjectKey: null,
@@ -226,7 +226,7 @@ describe('SubtitlesService', () => {
     prismaMock.subtitleJob.create.mockResolvedValueOnce({
       createdAt: new Date('2026-07-03T01:00:00.000Z'),
       errorCode: null,
-      expiresAt: new Date('2026-07-10T01:00:00.000Z'),
+      expiresAt: new Date('2099-07-10T01:00:00.000Z'),
       id: 'job-1',
       originalFileName: 'sample-video.mp4',
       resultObjectKey: null,
@@ -452,7 +452,7 @@ describe('SubtitlesService', () => {
     prismaMock.subtitleJob.findUnique.mockResolvedValueOnce({
       createdAt: new Date('2026-07-03T01:00:00.000Z'),
       errorCode: null,
-      expiresAt: new Date('2026-07-10T01:00:00.000Z'),
+      expiresAt: new Date('2099-07-10T01:00:00.000Z'),
       id: 'job-1',
       originalFileName: 'sample video.mp4',
       resultObjectKey: 'subtitles/job-1/english.srt',

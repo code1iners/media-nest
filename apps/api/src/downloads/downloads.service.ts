@@ -4,6 +4,7 @@ import { ExtractionJobStatus, ExtractionType } from '@mytube-extract/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDownloadJobDto } from './dto/create-download-job.dto';
 import {
+  createCanonicalYoutubeUrl,
   parseDownloadQuality,
   parseDownloadType,
   parseYoutubeVideoId,
@@ -31,6 +32,8 @@ export class DownloadsService {
     const quality = parseDownloadQuality(type, input.quality);
     /** 요청 URL에서 추출한 YouTube video ID. */
     const videoId = parseYoutubeVideoId(input.url);
+    /** DB와 worker에 저장할 query-free canonical source URL. */
+    const sourceUrl = createCanonicalYoutubeUrl(videoId);
     /** 현재 재사용 가능한 asset 후보. */
     const reusableAsset = await this.prisma.extractedAsset.findFirst({
       where: {
@@ -62,7 +65,7 @@ export class DownloadsService {
           ? ExtractionJobStatus.completed
           : ExtractionJobStatus.queued,
         type,
-        url: input.url?.trim() ?? '',
+        url: sourceUrl,
         videoId,
       },
       include: {

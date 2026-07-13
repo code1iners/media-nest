@@ -39,7 +39,8 @@
       "ts"
     ],
     "moduleNameMapper": {
-      "^@mytube-extract/db$": "<rootDir>/../../packages/db/src/index.ts"
+      "^@mytube-extract/db$": "<rootDir>/../../packages/db/src/index.ts",
+      "^@mytube-extract/media-downloader$": "<rootDir>/../../packages/media-downloader/src/index.ts"
     },
     "rootDir": ".",
     "testEnvironment": "node",
@@ -53,6 +54,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
     "@ce1pers/random-helpers": "^1.1.3",
     "@mytube-extract/db": "workspace:*",
+    "@mytube-extract/media-downloader": "workspace:*",
     "@nestjs/common": "^11.1.27",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.27",

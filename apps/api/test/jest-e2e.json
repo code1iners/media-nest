@@ -1,7 +1,8 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
   "moduleNameMapper": {
-    "^@mytube-extract/db$": "<rootDir>/../../../packages/db/src/index.ts"
+    "^@mytube-extract/db$": "<rootDir>/../../../packages/db/src/index.ts",
+    "^@mytube-extract/media-downloader$": "<rootDir>/../../../packages/media-downloader/src/index.ts"
   },
   "rootDir": ".",
   "testEnvironment": "node",

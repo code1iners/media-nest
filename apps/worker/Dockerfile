@@ -26,12 +26,14 @@ COPY apps/chrome-extension/package.json ./apps/chrome-extension/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/worker/package.json ./apps/worker/package.json
 COPY packages/db/package.json ./packages/db/package.json
+COPY packages/media-downloader/package.json ./packages/media-downloader/package.json
 ARG YOUTUBE_DL_HOST
 RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
 RUN YOUTUBE_DL_HOST=${YOUTUBE_DL_HOST} pnpm rebuild --pending
 RUN pnpm --filter @mytube-extract/db run build
+RUN pnpm --filter @mytube-extract/media-downloader run build
 RUN pnpm --filter worker run build
 RUN pnpm --filter worker deploy --prod --legacy /prod/worker
 

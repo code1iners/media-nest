@@ -5,9 +5,16 @@ import {
   normalizeSourceUrl,
 } from '../../src/domain/download-options/download-options';
 import { buildDownloadUrl, buildHealthUrl } from '../../src/services/mytube-extract/download-url';
-import { resolveDefaultApiBaseUrl } from '../../src/shared/constants';
+import {
+  LOCAL_API_BASE_URL,
+  resolveDefaultApiBaseUrl,
+} from '../../src/shared/constants';
 
 describe('download URL behavior', () => {
+  it('uses port 5011 as the local API default', () => {
+    expect(LOCAL_API_BASE_URL).toBe('http://127.0.0.1:5011');
+  });
+
   it('normalizes API base URLs before building download URLs', () => {
     expect(normalizeApiBaseUrl(' http://127.0.0.1:3030/ ')).toBe('http://127.0.0.1:3030');
   });
