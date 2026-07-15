@@ -9,7 +9,8 @@
 - Web 앱 개요: `docs/web/current-implementation-prd.md`, `docs/web/current-implementation-fsd.md`
 - API 제품/구조 개요: `docs/api/current-implementation-prd.md`, `docs/api/current-implementation-fsd.md`
 - Chrome 확장 프로그램 개요: `docs/chrome-extension/current-implementation-prd.md`, `docs/chrome-extension/current-implementation-fsd.md`
-- Chrome 확장 프로그램 브랜딩 기준: `docs/chrome-extension/branding-direction.md`
+- 공통 브랜드 가이드라인: `docs/brand-guidelines.md`
+- Chrome 확장 프로그램 브랜딩 적용: `docs/chrome-extension/branding-direction.md`
 - 호환용 자막 업로드 제거 조건: `docs/deprecated/subtitle-legacy-multipart-upload.md`
 - 미구현 과제: `docs/unimplemented/current-unimplemented.md`
 
