@@ -103,6 +103,7 @@ status는 info·success·error semantic 역할로만 사용한다. 색만으로 
 
 - Web과 Chrome popup은 CSS `px`와 같은 semantic token 의미를 사용한다.
 - Web은 responsive viewport와 browser zoom을 지원한다.
+- Web의 헤더·본문·하단 탭은 `760px` 공통 최대 폭 안에서 같은 반응형 좌우 여백과 가용 폭 `100%`를 사용한다.
 - popup은 현재 360px 폭 제약 안에서 같은 spacing·type·color 규칙을 축소 적용한다.
 - iOS·Android·desktop native mapping은 현재 대상이 아니므로 정의하지 않는다.
 
