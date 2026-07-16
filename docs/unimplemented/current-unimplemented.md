@@ -1,12 +1,12 @@
 # MyTube Extract Current Unimplemented
 
-## 자막 추출 후속 기능
+## 긴 영상 자막 추출과 Whisper 준비 자동화
 
 - 상태: 미구현
 - 대상 표면: `route /subtitles`, `POST /subtitles/uploads/complete`, `GET /subtitles/jobs/:jobId/file`, `apps/worker`
-- 현재 상태: Web 앱은 `/subtitles`에서 로컬 `mp4`, `mov`, `webm` 파일을 받아 영어 SRT 생성 job을 요청하고, 완료된 영어 SRT 다운로드를 제공한다. 사용자는 `base.en`, `small.en` 모델을 선택할 수 있고 예상 처리 시간을 볼 수 있다. 한글 번역 버튼은 CTA 2 위치만 표시하고 비활성 상태다. worker는 사용자가 직접 준비한 `whisper.cpp` binary/model path를 사용하며, 긴 영상 audio chunking과 모델 자동 다운로드를 제공하지 않는다.
-- 필요성: 영어 SRT 생성 이후 한글 번역, 긴 영상 처리, 자막 편집, Whisper 모델 준비 자동화 같은 후속 요구를 지원할 수 있다.
-- 구현 조건: 번역 API 계약, SRT 편집 여부, 긴 영상 chunking 정책, Whisper binary/model 배포 방식을 먼저 결정한다.
+- 현재 상태: Web 앱은 `/subtitles`에서 로컬 `mp4`, `mov`, `webm` 파일을 받아 영어 SRT 생성 job을 요청하고 완료된 영어 SRT 다운로드를 제공한다. 사용자는 `base.en`, `small.en` 모델을 선택할 수 있고 예상 처리 시간을 볼 수 있다. worker는 사용자가 직접 준비한 `whisper.cpp` binary/model path를 사용하며, 긴 영상 audio chunking과 모델 자동 다운로드를 제공하지 않는다.
+- 필요성: 긴 영상 처리와 Whisper 모델 준비 자동화가 필요해질 수 있다.
+- 구현 조건: 긴 영상 chunking 정책과 Whisper binary/model 배포 방식을 먼저 결정한다.
 - 관련 근거:
   - `apps/web/src/app/pages/subtitles-extract/page.tsx`
   - `apps/api/src/subtitles/subtitles.controller.ts`

@@ -24,7 +24,8 @@
 - 사용자가 확장 아이콘을 누르면 popup이 열린다.
 - Popup은 원본 URL 직접 입력을 기본 다운로드 조건으로 사용한다.
 - 사용자는 원본 URL을 직접 입력하거나 현재 탭 URL 가져오기 버튼을 누른다.
-- 원본 URL이 비어 있거나 지원 YouTube URL 형식이 아니면 다운로드 액션을 비활성화하고 URL 입력 상태를 보여준다.
+- 원본 URL이 비어 있거나 지원 YouTube URL 형식이 아니면 다운로드 액션을 비활성화하고 URL 입력 아래에 이유를 텍스트로 표시한다. 형식 오류 입력은 오류 상태로 표시한다.
+- 유효한 원본 URL이 있는 상태에서 현재 탭 URL을 가져오지 못하면 기존 URL과 다운로드 가능 상태는 유지하고, 현재 탭 실패 문구만 표시한다.
 - 원본 URL이 유효한 YouTube URL이면 다운로드 옵션과 실행 액션을 활성화한다.
 
 ### 다운로드 모드
@@ -105,6 +106,7 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 | --- | --- | --- |
 | Missing source URL | 원본 URL이 비어 있음 | URL 입력 필요 |
 | Invalid source URL | 원본 URL이 지원 YouTube URL 형식이 아님 | URL 수정 필요 |
+| Current tab URL unavailable | 현재 탭이 지원 YouTube URL이 아님 | 기존 유효 URL 유지, 현재 탭 실패 문구 확인 |
 | Ready | 원본 URL이 유효한 지원 YouTube URL임 | 모드와 옵션을 선택해 다운로드 실행 |
 | Checking server | `/health` 확인 중 | 다운로드 실행 대기 |
 | Server unavailable | `/health` 요청 실패 또는 비정상 응답 | 서버 상태 확인 또는 재시도 |
@@ -158,7 +160,7 @@ Chrome 확장 프로그램은 현재 URL query endpoint를 사용한다.
 - `pnpm --filter chrome-extension run build`가 WXT generated manifest, popup asset, 권한, icon 참조를 검증한다.
 - `pnpm --filter chrome-extension run test`가 URL 검증, API URL 생성, storage key 호환성, popup 상태 전이를 검증한다.
 - `pnpm --filter chrome-extension run lint`가 WXT type generation과 TypeScript compile을 검증한다.
-- `pnpm --filter chrome-extension run test:browser`가 실제 API `/health`, WXT load unpacked 렌더링, built popup의 URL 미입력/서버 실패/다운로드 시작 흐름을 검증한다.
+- `pnpm --filter chrome-extension run test:browser`가 실제 API `/health`, WXT load unpacked 렌더링, built popup의 URL 미입력·형식 오류·현재 탭 가져오기 실패·서버 실패·다운로드 시작 흐름을 검증한다.
 
 ## 후속 보류 사항
 

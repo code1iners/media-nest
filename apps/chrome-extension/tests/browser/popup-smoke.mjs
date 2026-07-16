@@ -142,7 +142,7 @@ async function verifyLoadUnpackedPopup(outputRoot) {
       waitUntil: 'domcontentloaded',
     });
     await popupPage.getByRole('heading', { name: 'MyTube Extract' }).waitFor({ timeout: 10000 });
-    await popupPage.getByText('이 영상은 이제 제 겁니다').waitFor({ timeout: 10000 });
+    await popupPage.getByText('영상 추출 도구').waitFor({ timeout: 10000 });
   } finally {
     await closeBrowserContext(context);
   }
@@ -182,8 +182,18 @@ async function verifyMissingSourceUrlFlow(origin) {
     });
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
-    await expectStatusText(page, '추출할 URL을 입력하세요.');
     await expectDownloadButtonDisabled(page, true);
+    await expectStatusText(page, '추출할 URL을 입력하세요.');
+
+    await page.getByLabel('추출 URL').fill('not-a-url');
+    await expectStatusText(page, '지원하는 YouTube URL을 입력하세요.');
+
+    /** 잘못된 URL 입력의 접근성 오류 상태. */
+    const invalidState = await page.getByLabel('추출 URL').getAttribute('aria-invalid');
+
+    if (invalidState !== 'true') {
+      throw new Error(`Expected invalid URL input state, got ${invalidState}`);
+    }
   } finally {
     await browser.close();
   }
@@ -204,7 +214,6 @@ async function verifyCurrentTabImportFlow(origin) {
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
     await page.getByRole('button', { name: '현재 탭 사용' }).click();
-    await expectStatusText(page, '추출할 URL이 준비되었습니다.');
     await expectDownloadButtonDisabled(page, false);
 
     /** 현재 탭에서 가져온 source URL 입력값. */
@@ -212,6 +221,20 @@ async function verifyCurrentTabImportFlow(origin) {
 
     if (sourceUrl !== 'https://www.youtube.com/watch?v=abc123_DEF0') {
       throw new Error(`Unexpected imported source URL: ${sourceUrl}`);
+    }
+
+    await page.evaluate(() => {
+      globalThis.__myTubeExtractCurrentTabUrl = 'https://example.com/watch?v=abc123_DEF0';
+    });
+    await page.getByRole('button', { name: '현재 탭 사용' }).click();
+    await expectStatusText(page, '현재 탭에서 지원하는 YouTube URL을 찾을 수 없습니다.');
+    await expectDownloadButtonDisabled(page, false);
+
+    /** 유효한 기존 URL은 현재 탭 가져오기 실패로 오류 입력이 되지 않는다. */
+    const invalidState = await page.getByLabel('추출 URL').getAttribute('aria-invalid');
+
+    if (invalidState !== null) {
+      throw new Error(`Expected valid source URL input state, got ${invalidState}`);
     }
   } finally {
     await browser.close();
@@ -240,9 +263,11 @@ async function verifyServerUnavailableFlow(origin) {
     await page.goto(`${origin}/popup.html`, { timeout: 10000, waitUntil: 'domcontentloaded' });
 
     await page.getByLabel('추출 URL').fill('https://www.youtube.com/watch?v=abc123_DEF0');
-    await expectStatusText(page, '추출할 URL이 준비되었습니다.');
     await page.getByRole('button', { name: '추출 시작' }).click();
     await expectStatusText(page, 'Server is unavailable.');
+    await expectRequestSettingsHidden(page);
+    await page.getByRole('button', { name: '요청 설정으로 돌아가기' }).click();
+    await page.getByLabel('추출 URL').waitFor({ timeout: 10000 });
 
     /** Fake Chrome downloads API가 요청한 URL. */
     const downloadUrl = await page.evaluate(() => globalThis.__myTubeExtractDownloadUrl);
@@ -281,11 +306,13 @@ async function verifyDownloadFlow(origin) {
     await page.getByLabel('추출 URL').fill('https://www.youtube.com/watch?v=abc123_DEF0');
     await page.getByLabel('파일명').fill('browser smoke');
     await page.getByLabel('최대 비트레이트').fill('192');
-    await expectStatusText(page, '추출할 URL이 준비되었습니다.');
     await expectDownloadButtonDisabled(page, false);
     await expectDownloadButtonVisibleInViewport(page);
     await page.getByRole('button', { name: '추출 시작' }).click();
     await expectStatusText(page, '추출 요청을 시작했습니다.');
+    await expectRequestSettingsHidden(page);
+    await page.getByRole('button', { name: '새 요청' }).click();
+    await page.getByLabel('추출 URL').waitFor({ timeout: 10000 });
 
     /** Fake Chrome downloads API가 요청한 URL. */
     const downloadUrl = await page.evaluate(() => globalThis.__myTubeExtractDownloadUrl);
@@ -438,7 +465,17 @@ async function closeBrowserContext(context) {
 
 /** Status text가 기대값이 될 때까지 기다린다. */
 async function expectStatusText(page, expectedText) {
-  await page.getByRole('status').filter({ hasText: expectedText }).waitFor({ timeout: 10000 });
+  await page.getByText(expectedText, { exact: true }).waitFor({ timeout: 10000 });
+}
+
+/** 처리·결과·오류 화면에 request form이 남지 않았는지 확인한다. */
+async function expectRequestSettingsHidden(page) {
+  /** request form URL input 개수. */
+  const sourceUrlInputCount = await page.getByLabel('추출 URL').count();
+
+  if (sourceUrlInputCount !== 0) {
+    throw new Error('Expected request settings to be hidden after submission.');
+  }
 }
 
 /** Download button disabled 상태를 확인한다. */

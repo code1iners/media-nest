@@ -60,38 +60,37 @@
 6. 사용자가 오디오 또는 비디오 모드를 선택한다.
 7. 사용자가 모드별 품질을 선택한다.
 8. 앱이 React Query `useQuery`로 `GET /health` worker 상태를 진입 시와 주기적으로 확인한다.
-9. submit 직전 React Query `useMutation`이 worker health를 다시 확인한다.
-10. worker가 사용 가능하면 앱이 `POST /downloads`로 job을 만든다.
-11. 앱이 terminal 상태까지 `GET /downloads/:jobId`를 2500ms 간격으로 polling한다.
-12. job 생성 요청 중이거나 terminal 상태 전이면 하단 탭으로 다른 route 이동을 시도해도 이동하지 않는다.
-13. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 다운로드 링크를 보여준다.
-14. 다운로드 파일명은 web 앱이 강제하지 않고 API의 `Content-Disposition` attachment 파일명을 따른다.
-15. `/subtitles`에서 사용자가 로컬 영상 파일을 선택하거나 dropzone에 드롭한다.
-16. 앱은 `mp4`, `mov`, `webm` 파일인지 검증한다.
-17. 사용자는 `base_en` 또는 `small_en` Whisper 모델을 선택한다. 기본값은 `base_en`이다.
-18. 앱은 선택한 영상 metadata에서 길이를 읽어 모델별 예상 처리 시간을 표시한다.
-19. `영어 SRT 생성`을 누르면 submit 직전 worker health를 다시 확인한다.
-20. worker가 사용 가능하면 앱이 `POST /subtitles/uploads`로 R2 direct upload session을 만든다.
-21. 앱이 session 응답의 presigned URL에 영상 file slice를 `PUT`으로 직접 업로드한다.
-22. 앱은 각 part 응답의 `ETag`를 모아 `POST /subtitles/uploads/complete`로 자막 job을 만든다.
-23. 앱이 terminal 상태까지 `GET /subtitles/jobs/:jobId`를 2500ms 간격으로 polling한다.
-24. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 영어 SRT 다운로드 링크를 보여준다.
-25. `한글로 번역` 버튼은 CTA 2 위치만 표시하고 비활성 상태로 둔다.
+9. 최초 health 확인 중에는 요청 설정을 유지하고 `서비스 상태를 확인 중입니다.` 상태 안내만 표시한다.
+10. submit 직전 React Query `useMutation`이 worker health를 다시 확인한다.
+11. worker가 사용 가능하면 앱이 `POST /downloads`로 job을 만든다.
+12. 앱이 terminal 상태까지 `GET /downloads/:jobId`를 2500ms 간격으로 polling한다.
+13. job 생성 요청 중이거나 terminal 상태 전이면 하단 탭으로 다른 route 이동을 시도해도 이동하지 않는다.
+14. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 다운로드 링크를 보여준다.
+15. 다운로드 파일명은 web 앱이 강제하지 않고 API의 `Content-Disposition` attachment 파일명을 따른다.
+16. `/subtitles`에서 사용자가 로컬 영상 파일을 선택하거나 dropzone에 드롭한다.
+17. 앱은 `mp4`, `mov`, `webm` 파일인지 검증한다.
+18. 사용자는 `base_en` 또는 `small_en` Whisper 모델을 선택한다. 기본값은 `base_en`이다.
+19. 앱은 선택한 영상 metadata에서 길이를 읽어 모델별 예상 처리 시간을 표시한다.
+20. `영어 SRT 생성`을 누르면 submit 직전 worker health를 다시 확인한다.
+21. worker가 사용 가능하면 앱이 `POST /subtitles/uploads`로 R2 direct upload session을 만든다.
+22. 앱이 session 응답의 presigned URL에 영상 file slice를 `PUT`으로 직접 업로드한다.
+23. 앱은 각 part 응답의 `ETag`를 모아 `POST /subtitles/uploads/complete`로 자막 job을 만든다.
+24. 앱이 terminal 상태까지 `GET /subtitles/jobs/:jobId`를 2500ms 간격으로 polling한다.
+25. `completed` 상태가 되면 `downloadUrl`을 API base URL과 결합해 영어 SRT 다운로드 링크를 보여준다.
 
 worker 미가용 흐름:
 
 - `GET /health`의 `worker.available`이 `false`이면 submit button을 비활성화한다.
-- 상태 영역 제목에는 `추출 기능을 사용할 수 없습니다`를 표시한다.
-- 상태 영역 본문에는 `현재 추출 서버가 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.`를 표시한다.
+- API job이 없으면 요청 설정을 유지하고 `현재 추출 서버가 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.`와 `다시 확인` 동작을 표시한다.
+- 요청 실패 또는 진행 중 job이 있으면 오류 화면에 같은 안내와 복구 동작을 표시한다.
 - 사용자 문구는 운영 시간이 정해져 있다는 인상을 주지 않도록 `서비스 시간` 표현을 쓰지 않는다.
 - job polling 중 health polling 결과가 미가용으로 바뀌어도 같은 문구를 표시한다.
 
 서비스 상태 확인 실패 흐름:
 
 - `GET /health` 응답에 `worker.available`이 없거나 boolean이 아니면 API client가 `SERVICE_STATUS_FORMAT_ERROR`로 처리한다.
-- 앱은 기존 화면을 유지하고 submit button을 비활성화한다.
-- 상태 영역 제목에는 `서비스 상태를 확인할 수 없습니다`를 표시한다.
-- 상태 영역 본문에는 `서버 상태를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.`를 표시한다.
+- API job이 없으면 요청 설정을 유지하고 submit button을 비활성화한다.
+- 요청 실패 또는 진행 중 job이 있으면 오류 화면에 `서비스 상태를 확인할 수 없습니다` 안내와 복구 동작을 표시한다.
 - 사용자는 `상세 원인 보기`를 눌러 오류 코드, 발생 위치, 요청 경로, 응답 상태, 응답 내용을 확인할 수 있다.
 - `원인 복사` 버튼은 표시된 상세 원인 로그만 복사한다.
 
@@ -105,6 +104,7 @@ worker 미가용 흐름:
 ## 입력 규칙
 
 - `sourceUrl`은 필수다.
+- 빈 값과 지원하지 않는 YouTube URL은 요청 설정의 URL 필드 근처에 텍스트로 표시한다. 형식 오류인 경우 입력은 오류 상태로 표시한다.
 - 지원 URL은 `youtube.com/watch`, `www.youtube.com/watch`, `youtu.be/{id}`, `youtube.com/shorts/{id}`, `www.youtube.com/shorts/{id}`다.
 - YouTube video ID는 11자 `[a-zA-Z0-9_-]` 형식이어야 한다.
 - `mode`는 `audio` 또는 `video`다.
@@ -144,6 +144,7 @@ Web 앱은 API 응답의 `displayStatus`, `progress`, `message`, `retentionDays`
 - subtitle `failed`: 재시도 필요
 - subtitle UI step `file_select`: 파일 선택 전 표시 전용 단계
 - worker unavailable: 추출 기능 사용 불가 안내
+- 최초 worker health 확인: 요청 설정 안의 `role="status"` 안내와 재시도 버튼 없음
 - service status format error: 서비스 상태 확인 실패 안내와 상세 원인 보기
 - subtitle direct upload: R2 업로드 진행률, 실패 안내, 상세 원인 보기
 - subtitle upload too large: 선택한 파일 크기를 포함한 용량 초과 안내
@@ -163,4 +164,3 @@ Web 앱은 API 응답의 `displayStatus`, `progress`, `message`, `retentionDays`
 - API base URL 화면 설정
 - yt-dlp stderr 기반 세부 진행률
 - web 앱 e2e/browser smoke
-- 자막 한글 번역 CTA 2 구현

@@ -55,6 +55,8 @@ export type PopupDownloadModel = {
   initialize(): Promise<void>;
   /** 현재 탭 URL을 source URL 입력값으로 가져온다. */
   importCurrentTabUrl(): Promise<void>;
+  /** 처리 결과 화면에서 요청 설정 화면으로 돌아간다. */
+  returnToForm(): Promise<void>;
   /** Snapshot 변경 구독을 등록한다. */
   subscribe(listener: () => void): () => void;
   /** Download submit을 처리한다. */
@@ -180,6 +182,15 @@ export function createPopupDownloadModel(
           ),
         });
       }
+    },
+    async returnToForm() {
+      // 기존 URL과 옵션을 유지해 사용자가 설정만 고쳐 재요청할 수 있게 한다.
+      setSnapshot(
+        renderReadyState({
+          ...snapshot,
+          downloading: false,
+        }),
+      );
     },
     subscribe(listener) {
       listeners.add(listener);

@@ -28,6 +28,8 @@ import {
 } from '../../../../api/mytube-extract.api';
 import { useNavigationLock } from '../../../components/navigation-lock-context';
 import { type PixelIconName } from '../../../components/pixel-art';
+import { getExtractViewPhase } from '../../../utils/extract-view-phase.util';
+import { getWorkerHealthNotice } from '../../../utils/worker-health-notice.util';
 
 /** worker 미가용 안내 문구. */
 const WORKER_UNAVAILABLE_MESSAGE =
@@ -151,6 +153,8 @@ export function useSubtitlesExtractLogic() {
   /** terminal 상태가 아닌 job 진행 여부. */
   const jobInProgress =
     !!activeJob && !isSubtitleTerminalStatus(activeJob.displayStatus);
+  /** 완료 화면을 유지할 API job 여부. */
+  const hasCompletedJob = activeJob?.displayStatus === 'completed';
   /** route를 벗어나면 안 되는 자막 요청/진행 상태 여부. */
   const subtitleNavigationLocked =
     subtitleJobMutation.isPending || jobInProgress;
@@ -160,6 +164,15 @@ export function useSubtitlesExtractLogic() {
   const workerHealthFailed = workerHealthQuery.isError;
   /** worker health 확인 중인지 여부. */
   const workerHealthChecking = workerHealthQuery.isPending;
+  /** 요청 설정 화면에 표시할 worker health 안내. */
+  const requestAvailabilityNotice = getWorkerHealthNotice({
+    failed: workerHealthFailed,
+    pending: workerHealthChecking,
+    unavailable: workerUnavailable,
+    unavailableMessage: WORKER_UNAVAILABLE_MESSAGE,
+  });
+  /** R2 업로드 session 생성부터 자막 job 생성까지의 요청 처리 여부. */
+  const isSubmitting = subtitleJobMutation.isPending;
   /** worker health 오류 상세 원인. */
   const workerHealthErrorDetail = createWorkerHealthErrorDetail(
     workerHealthQuery.error,
@@ -200,39 +213,43 @@ export function useSubtitlesExtractLogic() {
         : Math.round(statusJob.progress / 10);
   /** 현재 상태 제목. */
   const statusTitle =
+    (uploadProgress !== null ? '원본 영상을 업로드 중입니다' : '') ||
+    (isSubmitting ? '자막 요청을 준비하고 있습니다' : '') ||
+    (hasCompletedJob ? createStatusTitle(statusJob) : '') ||
     createWorkerHealthTitle({
       failed: workerHealthFailed,
       unavailable: workerUnavailable,
     }) ||
-    (uploadProgress !== null ? '원본 영상을 업로드 중입니다' : '') ||
     createStatusTitle(statusJob);
   /** 현재 상태 문구. */
   const statusMessage =
-    createWorkerHealthMessage({
-      failed: workerHealthFailed,
-      pending: workerHealthChecking,
-      unavailable: workerUnavailable,
-    }) ||
     (uploadProgress !== null
       ? `R2로 원본 영상을 직접 업로드 중입니다. (${uploadProgress}%)`
       : '') ||
+    (isSubmitting ? '추출 서버 상태를 확인하고 업로드를 준비 중입니다.' : '') ||
+    (hasCompletedJob ? statusJob.message : '') ||
+    requestAvailabilityNotice?.message ||
     requestError ||
     statusJob.message ||
     validation.message;
   /** 현재 상태 아이콘 이름. */
   const statusIconName =
-    workerHealthFailed || workerUnavailable
-      ? 'failed'
-      : uploadProgress !== null
-        ? 'processing'
-        : getStatusIconName(statusJob.displayStatus);
+    uploadProgress !== null || isSubmitting
+      ? 'processing'
+      : hasCompletedJob
+        ? getStatusIconName(statusJob.displayStatus)
+        : workerHealthFailed || workerUnavailable
+          ? 'failed'
+          : getStatusIconName(statusJob.displayStatus);
   /** 현재 상태 표시 tone. */
   const statusTone =
-    workerHealthFailed || workerUnavailable
-      ? 'failed'
-      : uploadProgress !== null
-        ? 'processing'
-        : getStatusTone(statusJob.displayStatus);
+    uploadProgress !== null || isSubmitting
+      ? 'processing'
+      : hasCompletedJob
+        ? getStatusTone(statusJob.displayStatus)
+        : workerHealthFailed || workerUnavailable
+          ? 'failed'
+          : getStatusTone(statusJob.displayStatus);
   /** 완료 SRT 다운로드 href. */
   const downloadHref = statusJob.downloadUrl
     ? buildApiUrl(statusJob.downloadUrl, apiBaseUrl)
@@ -246,6 +263,14 @@ export function useSubtitlesExtractLogic() {
     selectedVideoDurationSeconds,
     selectedWhisperModel,
   );
+  /** 현재 화면에 단독으로 표시할 자막 추출 단계. */
+  const viewPhase = getExtractViewPhase({
+    hasActiveJob: activeJob !== null,
+    hasRequestError: Boolean(requestError),
+    isSubmitting,
+    hasWorkerHealthError: workerHealthFailed || workerUnavailable,
+    status: activeJob?.displayStatus ?? null,
+  });
 
   // Functions.
 
@@ -298,6 +323,15 @@ export function useSubtitlesExtractLogic() {
   /** worker health를 다시 확인한다. */
   function retryWorkerHealth() {
     void workerHealthQuery.refetch();
+  }
+
+  /** terminal 결과나 오류에서 선택 파일을 유지한 채 요청 화면으로 돌아간다. */
+  function returnToRequest() {
+    stopPolling();
+    setActiveJob(null);
+    setRequestError('');
+    setUploadProgress(null);
+    subtitleJobMutation.reset();
   }
 
   // Effects.
@@ -455,6 +489,7 @@ export function useSubtitlesExtractLogic() {
     handleWhisperModelChange,
     processingEstimateMessage,
     retryWorkerHealth,
+    requestAvailabilityNotice,
     selectedFile,
     selectedFileMeta,
     selectedWhisperModel,
@@ -464,7 +499,9 @@ export function useSubtitlesExtractLogic() {
     statusMessage,
     statusTitle,
     statusTone,
+    returnToRequest,
     validation,
+    viewPhase,
     workerHealthFailed,
     workerHealthIsFetching: workerHealthQuery.isFetching,
   };
@@ -576,30 +613,6 @@ function createWorkerHealthTitle(input: {
 
   if (input.failed) {
     return '서비스 상태를 확인할 수 없습니다';
-  }
-
-  return '';
-}
-
-/** worker health 상태 문구를 만든다. */
-function createWorkerHealthMessage(input: {
-  /** worker health 확인 실패 여부. */
-  failed: boolean;
-  /** worker health 첫 확인 진행 여부. */
-  pending: boolean;
-  /** worker 미가용 여부. */
-  unavailable: boolean;
-}) {
-  if (input.unavailable) {
-    return WORKER_UNAVAILABLE_MESSAGE;
-  }
-
-  if (input.failed) {
-    return '서버 상태를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.';
-  }
-
-  if (input.pending) {
-    return '서비스 상태를 확인 중입니다.';
   }
 
   return '';

@@ -276,6 +276,29 @@ describe('popup download model', () => {
     });
   });
 
+  it('returns a completed popup to its request settings without clearing the URL', async () => {
+    /** Popup model dependency. */
+    const dependencies = createDependencies();
+    /** Popup download model. */
+    const model = createPopupDownloadModel(dependencies);
+
+    await model.initialize();
+    await model.updateOption('sourceUrl', 'https://www.youtube.com/watch?v=abc123_DEF0');
+    await model.submitDownload();
+    await model.returnToForm();
+
+    expect(model.getSnapshot()).toMatchObject({
+      canDownload: true,
+      downloading: false,
+      options: {
+        sourceUrl: 'https://www.youtube.com/watch?v=abc123_DEF0',
+      },
+      status: {
+        kind: 'ready',
+      },
+    });
+  });
+
   it('updates options and preserves video mode specific URL building', async () => {
     /** Popup model dependency. */
     const dependencies = createDependencies();

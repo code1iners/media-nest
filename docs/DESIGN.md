@@ -4,7 +4,7 @@
 
 MyTube Extract의 Web과 Chrome 확장 popup에 공통 적용하는 Foundation이다.
 
-범위는 color, typography, spacing, radius, elevation, theme·mode, 접근성, 플랫폼 mapping이다. 컴포넌트 API, token 코드 생성, Figma, 실제 UI 구현은 포함하지 않는다.
+범위는 color, typography, spacing, radius, elevation, theme·mode, 접근성, 플랫폼 mapping과 Web·popup 상태 화면 적용이다. 컴포넌트 API와 Figma는 포함하지 않는다.
 
 ## 2. 브랜드 입력과 디자인 원칙
 
@@ -110,16 +110,15 @@ status는 info·success·error semantic 역할로만 사용한다. 색만으로 
 
 | 항목 | 현재 | 목표 |
 | --- | --- | --- |
-| Color | navy·gold 중심, 플랫폼별 hex 상이 | violet·teal·amber 공통 semantic token |
-| Theme | dark-only | light/dark, OS 기본·사용자 선택 유지 |
-| Typography | Web LanaPixel, extension Inter | 양쪽 모두 LanaPixel |
-| Spacing / radius | 3~4px, 비정형 gap | 승인된 scale과 2/4px radius |
-| Elevation | 하단 shadow 사용 | flat·raised·floating 역할 분리 |
+| Color | violet·teal·amber 공통 semantic token 적용 | token 사용 범위 유지 |
+| Theme | light/dark, OS 기본·사용자 선택 유지 | token 구조를 바꾸지 않고 유지 |
+| Typography | Web·extension 모두 LanaPixel | font asset 배포 상태 유지 |
+| Spacing / radius | 4px 중심의 pixel container | 승인된 scale 안에서 유지 |
+| Elevation | raised `0 3px 0` | flat·raised 역할 분리 유지 |
+| 상태 화면 | 요청·처리 상태가 동시에 보임 | 요청 전 설정만, 요청 후 처리·결과·오류 단일 화면 |
 
 ## 열린 결정
 
-- `LanaPixel`의 라이선스·Chrome 확장 배포 포함 조건
-- theme 선택 저장의 구체적 구현 방식
 - logo wordmark와 안전 여백
 
 ## 조사 출처

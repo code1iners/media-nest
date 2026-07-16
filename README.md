@@ -275,7 +275,7 @@ pnpm --filter chrome-extension run lint
 pnpm --filter chrome-extension run test:browser
 ```
 
-`test:browser`는 먼저 API `/health`를 확인하고, WXT production build를 Chromium load unpacked로 렌더링한 뒤, built popup을 브라우저에서 실행해 URL 미입력, 현재 탭 URL 가져오기, 서버 확인 실패, 다운로드 시작 흐름을 검증한다. `dev:smoke`는 이미 실행 중인 WXT dev output으로 popup 렌더링만 빠르게 확인하며 production build를 만들지 않는다. Chrome Web Store 배포, 고정 extension ID 기반 CORS 허용, 다운로드 진행률 표시는 후속 범위다.
+`test:browser`는 먼저 API `/health`를 확인하고, WXT production build를 Chromium load unpacked로 렌더링한 뒤, built popup을 브라우저에서 실행해 URL 미입력·형식 오류, 현재 탭 URL 가져오기·실패, 서버 확인 실패, 다운로드 시작 흐름을 검증한다. `dev:smoke`는 이미 실행 중인 WXT dev output으로 popup 렌더링만 빠르게 확인하며 production build를 만들지 않는다. Chrome Web Store 배포, 고정 extension ID 기반 CORS 허용, 다운로드 진행률 표시는 후속 범위다.
 
 ## Test
 

@@ -12,7 +12,7 @@
 ## 사용자 흐름
 
 1. 사용자가 fixed bottom navigation의 `자막 추출`을 누르거나 `/subtitles`에 직접 접근한다.
-2. 앱은 공통 `MyTube Extract` 상단 hero 아래 영어 SRT 생성 화면을 표시한다.
+2. 앱은 공통 `MyTube Extract` 상단 header 아래 영어 SRT 생성 요청 설정만 표시한다.
 3. 사용자가 로컬 영상 파일을 선택하거나 dropzone에 드롭한다.
 4. 앱은 `mp4`, `mov`, `webm` 파일인지 검증한다.
 5. 사용자가 Whisper 모델을 `빠름 · base.en` 또는 `정확도 · small.en` 중 선택한다.
@@ -21,9 +21,9 @@
 8. 앱은 worker 상태를 확인한 뒤 `/subtitles/uploads`로 R2 direct upload session을 생성한다.
 9. 앱은 presigned URL에 영상 part를 직접 `PUT`으로 업로드하고 진행률을 표시한다.
 10. 앱은 `/subtitles/uploads/complete`로 자막 job을 생성한다.
-11. terminal 상태까지 `/subtitles/jobs/:jobId`를 polling한다.
+11. 요청 시작 직후부터 요청 설정을 숨기고 처리 상태만 표시하며, job 생성 뒤 terminal 상태까지 `/subtitles/jobs/:jobId`를 polling한다.
 12. 요청 생성 중이거나 terminal 상태 전이면 하단 navigation으로 다른 route 이동을 막는다.
-13. 완료되면 영어 SRT 다운로드 링크를 표시한다.
+13. 완료되면 영어 SRT 다운로드와 `새 요청`만 표시한다. 요청·job 실패와 만료는 오류 화면에서 복구 동작만 표시한다.
 
 ## 현재 표시 내용
 
@@ -33,7 +33,7 @@
 - 예상 시간: 영상 길이와 선택 모델 기준 대략치
 - CTA: `영어 SRT 생성`
 - 상태 단계: `파일 선택`, `대기`, `음성 추출`, `SRT 생성`, `완료`
-- 결과 액션: `영어 SRT 다운로드`, 비활성 `한글로 번역`
+- 결과 액션: `영어 SRT 다운로드`, `새 요청`
 
 ## API
 
@@ -48,15 +48,16 @@
 ## 주요 상태
 
 - 입력 검증 실패: submit 비활성화
-- worker unavailable: `자막 추출 기능을 사용할 수 없습니다`
-- health 확인 실패: `서비스 상태를 확인할 수 없습니다`
+- 최초 health 확인 중: 요청 설정을 유지하고 `서비스 상태를 확인 중입니다.`를 `role="status"`로 표시하며 재시도 버튼은 숨김
+- 요청 전 worker unavailable/health 확인 실패: 요청 설정을 유지하고 submit을 비활성화하며 `다시 확인`을 표시
+- 요청 실패 또는 진행 중 job의 worker unavailable/health 확인 실패: 오류 화면과 복구 동작 표시
 - 업로드 용량 초과: 선택한 파일 크기를 포함한 용량 초과 안내
 - R2 direct upload 실패: 실패 안내와 상세 원인 보기
-- 파일 선택 전: `파일 선택` 단계 선택
-- 유효 파일 선택 후: `대기` 단계 선택
-- R2 direct upload 중: 업로드 진행률 표시
-- queued/extracting_audio/transcribing/completed/failed/expired: 상태 패널과 진행률 표시
-- completed: API base URL과 `downloadUrl`을 결합한 다운로드 링크 표시
+- 요청 전: 파일 선택, 모델, 예상 시간, 요청 설정만 표시
+- R2 direct upload 중: 업로드 진행률만 표시
+- queued/extracting_audio/transcribing: 처리 상태와 진행률만 표시
+- completed: API base URL과 `downloadUrl`을 결합한 다운로드 링크 및 `새 요청` 표시
+- failed/expired/요청 오류: 오류와 요청 설정 복귀 동작만 표시
 - in progress: 다른 하단 navigation route로 이동 차단
 
 ## 미구현 범위
