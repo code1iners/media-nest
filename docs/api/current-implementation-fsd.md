@@ -36,7 +36,7 @@
 
 - Runtime: NestJS 11, `apps/api/Dockerfile` 기준 Node.js `22.22.3-bookworm-slim`
 - Media 처리: `youtube-dl-exec` `3.1.8`, `yt-dlp` `2026.06.09`
-- 오디오/비디오 병합 및 추출 의존성: Debian bookworm ffmpeg `7:5.1.8-0+deb12u1`
+- API/worker 오디오·비디오 병합 및 추출 의존성: Debian bookworm ffmpeg `7:5.1.9-0+deb12u1`, 실행 경로 `/usr/bin/ffmpeg`
 - `yt-dlp` 실행 의존성: Debian bookworm `python3`
 - 기본 포트: `PORT` 환경 변수가 없으면 `5011`
 - 환경 파일: `.env.{NODE_ENV}`, `.env` 순서로 로드

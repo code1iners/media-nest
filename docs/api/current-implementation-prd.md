@@ -96,7 +96,7 @@ Audio 도메인은 YouTube 원본 URL 또는 영상 ID를 입력받아 오디오
 현재 한계와 주의사항:
 
 - 오디오 추출은 ffmpeg 설치와 `FFMPEG_LOCATION` 환경 변수 설정에 영향을 받는다.
-- Docker 실행 환경은 Node.js `22.22.3-bookworm-slim`, `yt-dlp` `2026.06.09`, Debian bookworm ffmpeg `7:5.1.8-0+deb12u1`, `python3` 기준으로 고정한다.
+- Docker 실행 환경의 정확한 runtime dependency 버전은 [현재 구현 FSD](current-implementation-fsd.md)를 기준으로 하며, API와 worker는 같은 Debian Bookworm FFmpeg pin을 사용한다.
 - `GET /audio`의 non-YouTube `http/https` URL 허용은 기존 클라이언트 호환성을 위해 유지한다.
 - URL, YouTube 영상 ID, 파일명, 비트레이트 입력은 런타임에서 기본 검증한다.
 - 인증과 상세한 실패 사유 분류는 제공하지 않는다.

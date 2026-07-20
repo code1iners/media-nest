@@ -8,13 +8,7 @@ MyTube Extract는 YouTube 영상 URL 또는 영상 ID를 받아 비디오 파일
 - pnpm 11
 - ffmpeg
 
-Docker 실행 환경은 `apps/api/Dockerfile`, `apps/worker/Dockerfile`에서 아래 런타임 의존성을 고정한다.
-
-- Node.js: `node:22.22.3-bookworm-slim`
-- `youtube-dl-exec`: `pnpm-lock.yaml` 기준 `3.1.8`
-- `yt-dlp`: GitHub release `2026.06.09`
-- ffmpeg: Debian bookworm package `7:5.1.8-0+deb12u1`, 실행 경로 `/usr/bin/ffmpeg`
-- Python: Debian bookworm `python3`, `yt-dlp` 실행용
+Docker 실행 환경의 정확한 runtime dependency 계약은 [API 현재 구현 FSD](docs/api/current-implementation-fsd.md)를 기준으로 한다. API와 worker Dockerfile은 같은 Debian Bookworm FFmpeg pin을 사용한다.
 
 ## Environment
 

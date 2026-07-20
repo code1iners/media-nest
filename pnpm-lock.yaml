@@ -133,6 +133,9 @@ importers:
       '@types/chrome':
         specifier: ^0.1.43
         version: 0.1.43
+      '@types/node':
+        specifier: ^22.19.21
+        version: 22.19.21
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
