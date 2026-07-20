@@ -7,6 +7,7 @@ export type PixelIconName =
   | 'failed'
   | 'info'
   | 'link'
+  | 'newRequest'
   | 'processing'
   | 'queued'
   | 'subtitle'
@@ -136,6 +137,15 @@ function renderPixelIcon(name: PixelIconName) {
       <>
         <path d="M14 4h6v12h6v4h-4v4h-4v4h-2v-4h-4v-4H8v-4h6z" />
         <path d="M5 24h22v4H5zM5 20h4v4H5zM23 20h4v4h-4z" />
+      </>
+    );
+  }
+
+  if (name === 'newRequest') {
+    return (
+      <>
+        <path d="M8 3h12v4h4v4h4v18H8zM20 7v4h4zM12 7h8v4h-8zM12 11h12v14H12z" />
+        <path className="pixel-icon__cutout" d="M16 15h4v8h-4zM14 17h8v4h-8z" />
       </>
     );
   }

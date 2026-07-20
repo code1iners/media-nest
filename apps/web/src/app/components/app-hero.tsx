@@ -12,6 +12,18 @@ type AppHeroProps = {
   onThemePreferenceChange: (preference: ThemePreference) => void;
 };
 
+/** 헤더에서 바로 고를 수 있는 theme 방식. */
+const THEME_OPTIONS = [
+  { label: '시스템', value: 'system' },
+  { label: '라이트', value: 'light' },
+  { label: '다크', value: 'dark' },
+] as const satisfies ReadonlyArray<{
+  /** 화면에 표시할 theme 이름. */
+  label: string;
+  /** 저장할 theme preference 값. */
+  value: ThemePreference;
+}>;
+
 /** 모든 route에서 공유하는 앱 상단 브랜드 영역. */
 export function AppHero(props: AppHeroProps) {
   // Hooks.
@@ -29,8 +41,8 @@ export function AppHero(props: AppHeroProps) {
 
   // Handlers.
 
-  /** native select의 theme 값을 앱 state에 전달한다. */
-  function handleThemeChange(event: ChangeEvent<HTMLSelectElement>) {
+  /** native radio의 theme 값을 기존 앱 state에 전달한다. */
+  function handleThemeChange(event: ChangeEvent<HTMLInputElement>) {
     props.onThemePreferenceChange(event.currentTarget.value as ThemePreference);
   }
 
@@ -42,14 +54,23 @@ export function AppHero(props: AppHeroProps) {
         </h1>
         <p className="hero-copy">{pageLabel}</p>
       </div>
-      <label className="theme-control">
-        <span>테마</span>
-        <select value={props.themePreference} onChange={handleThemeChange}>
-          <option value="system">시스템</option>
-          <option value="light">라이트</option>
-          <option value="dark">다크</option>
-        </select>
-      </label>
+      <fieldset className="theme-control">
+        <legend>테마</legend>
+        <div className="theme-toggle">
+          {THEME_OPTIONS.map((option) => (
+            <label className="theme-toggle__option" key={option.value}>
+              <input
+                checked={props.themePreference === option.value}
+                name="theme-preference"
+                type="radio"
+                value={option.value}
+                onChange={handleThemeChange}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <div className="pixel-extractor" aria-hidden="true">
         <PixelExtractorArt />
       </div>

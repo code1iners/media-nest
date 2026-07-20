@@ -171,9 +171,9 @@ export function VideoExtractPage() {
           <div><dt>품질</dt><dd>{statusQualityLabel}</dd></div>
           <div><dt>보관 기간</dt><dd>완료 후 {statusJob.retentionDays}일</dd></div>
         </dl>
-        <div className="result-actions">
+        <div className="result-actions result-actions--video">
           <a className="download-button" href={downloadHref}><PixelIcon name="download" />다운로드</a>
-          <button className="secondary-button" type="button" onClick={returnToRequest}>새 요청</button>
+          <button className="secondary-button secondary-button--new-request" type="button" onClick={returnToRequest}><PixelIcon name="newRequest" />새 요청</button>
         </div>
       </section>
     );
